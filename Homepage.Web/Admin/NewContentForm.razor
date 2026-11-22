@@ -1,13 +1,21 @@
-<form method="post" action="/admin/content/new" class="form-row" style="grid-template-columns:2fr 1fr 1fr auto;align-items:end">
+<form method="post" action="/admin/content/new" class="form-row new-content" x-data="{ type: '@((Type ?? ContentType.Page).ToString())' }"
+      style="grid-template-columns:2fr 1fr 1fr 1fr auto;align-items:end">
     <input type="hidden" name="__RequestVerificationToken" value="@Token" />
     <div><label for="nt">Title</label><input id="nt" name="title" type="text" required maxlength="300" placeholder="New page or post title" /></div>
     <div>
         <label for="ny">Type</label>
-        <select id="ny" name="type">
+        <select id="ny" name="type" x-model="type">
             <option value="Page" selected="@(Type != ContentType.Post)">Page</option>
             <option value="Post" selected="@(Type == ContentType.Post)">Blog post</option>
         </select>
     </div>
+    <div x-show="type === 'Post'" x-cloak>
+        <label for="nb">Blog</label>
+        <select id="nb" name="blogId">
+            @foreach (var b in Blogs) { <option value="@b.Id">@b.Name (/@b.Slug)</option> }
+        </select>
+    </div>
+    <div x-show="type !== 'Post'"></div>
     <div>
         <label for="ng">Group</label>
         <select id="ng" name="groupId">
@@ -18,6 +26,7 @@
 </form>
 @code {
     [Parameter] public List<Group> Groups { get; set; } = [];
+    [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
     [Parameter] public int? DefaultGroupId { get; set; }
     [Parameter] public ContentType? Type { get; set; }
     [CascadingParameter] public HttpContext? HttpContext { get; set; }

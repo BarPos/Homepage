@@ -25,29 +25,47 @@ public sealed class ContentService(
 {
     public static ContentFacts Facts(ContentItem c) => new(c.GroupId, c.AuthorId, c.EverPublished);
 
-    /// <summary>Page addresses taken by fixed routes; a page there would publish but never be reachable.</summary>
-    public static readonly IReadOnlySet<string> ReservedPageSlugs = new HashSet<string>(StringComparer.Ordinal)
-        { "admin", "blog", "search", "media", "theme", "healthz", "feed-xml", "sitemap-xml", "robots-txt" };
-
-    private static bool IsReserved(ContentType type, string slug) => type == ContentType.Page && ReservedPageSlugs.Contains(slug);
 
     // ---------------------------------------------------------------- listing
 
-    /// <summary>Items the user can see (ro on their group), filtered in SQL.</summary>
-    public async Task<List<ContentItem>> ListAsync(EffectivePermissions perms, ContentType? type, int? groupId, string? search,
-        int take = 200, CancellationToken ct = default)
+    /// <summary>Items the user can see (ro on their group), filtered, counted and paged in SQL.</summary>
+    public async Task<PagedResult<ContentItem>> ListAsync(EffectivePermissions perms, ContentQuery q, CancellationToken ct = default)
+    {
+        var visible = perms.GroupsWith(Perm.Ro);
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var query = db.ContentItems.AsNoTracking().Where(c => visible.Contains(c.GroupId));
+        if (q.Type is { } t) query = query.Where(c => c.Type == t);
+        if (q.GroupId is { } g) query = query.Where(c => c.GroupId == g);
+        if (q.BlogId is { } b) query = query.Where(c => c.BlogId == b);
+        query = q.Status switch
+        {
+            "draft" => query.Where(c => c.Status == ContentStatus.Draft),
+            "published" => query.Where(c => c.Status == ContentStatus.Published),
+            "changed" => query.Where(c => c.Status == ContentStatus.Published && c.Blocks != c.DraftBlocks),
+            _ => query,
+        };
+        if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            var like = Paging.Like(q.Search);
+            query = query.Where(c => EF.Functions.ILike(c.Title, like) || EF.Functions.ILike(c.Slug, like));
+        }
+        query = q.Sort switch
+        {
+            "title" => query.OrderBy(c => c.Title).ThenBy(c => c.Id),
+            "published" => query.OrderByDescending(c => c.PublishedAtUtc).ThenByDescending(c => c.Id),
+            _ => query.OrderByDescending(c => c.UpdatedAtUtc).ThenByDescending(c => c.Id),
+        };
+        return await query.ToPageAsync(q.Page, q.PageSize, ct);
+    }
+
+    /// <summary>Counts for the dashboard, in SQL, over the groups the user can see.</summary>
+    public async Task<(int Pages, int Posts, int Drafts)> CountsAsync(EffectivePermissions perms, CancellationToken ct = default)
     {
         var visible = perms.GroupsWith(Perm.Ro);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var q = db.ContentItems.AsNoTracking().Where(c => visible.Contains(c.GroupId));
-        if (type is { } t) q = q.Where(c => c.Type == t);
-        if (groupId is { } g) q = q.Where(c => c.GroupId == g);
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var s = search.Trim();
-            q = q.Where(c => EF.Functions.ILike(c.Title, "%" + s.Replace("%", "\\%").Replace("_", "\\_") + "%"));
-        }
-        return await q.OrderByDescending(c => c.UpdatedAtUtc).Take(take).ToListAsync(ct);
+        return (await q.CountAsync(c => c.Type == ContentType.Page, ct), await q.CountAsync(c => c.Type == ContentType.Post, ct),
+            await q.CountAsync(c => c.Status == ContentStatus.Draft, ct));
     }
 
     public async Task<ContentItem> GetForViewAsync(EffectivePermissions perms, int id, CancellationToken ct = default)
@@ -61,14 +79,21 @@ public sealed class ContentService(
     // ---------------------------------------------------------------- create / settings / publish
 
     public async Task<ContentItem> CreateAsync(EffectivePermissions perms, ContentType type, string title, int groupId, string actor,
-        CancellationToken ct = default)
+        int? blogId = null, CancellationToken ct = default)
     {
         if (!ContentRules.CanCreateIn(perms, groupId)) throw new AccessDeniedException("You cannot create items in that group.");
         title = title.Trim();
         if (title.Length is 0 or > 300) throw new BlockException("The title must be 1 to 300 characters.");
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (!await db.Groups.AnyAsync(g => g.Id == groupId && g.Valid, ct)) throw new NotFoundException("The group does not exist.");
-        var slug = await UniqueSlugAsync(db, type, Slug.From(title) is { Length: > 0 } s ? s : "untitled", null, ct);
+        int? blog = null;
+        if (type == ContentType.Post)
+        {
+            blog = blogId is { } bid
+                ? await db.Blogs.Where(b => b.Id == bid).Select(b => (int?)b.Id).FirstOrDefaultAsync(ct) ?? throw new NotFoundException("The blog does not exist.")
+                : await db.Blogs.OrderBy(b => b.Id).Select(b => (int?)b.Id).FirstOrDefaultAsync(ct) ?? throw new NotFoundException("There is no blog.");
+        }
+        var slug = await UniqueSlugAsync(db, type, blog, Slug.From(title) is { Length: > 0 } s ? s : "untitled", null, ct);
         var now = time.GetUtcNow().UtcDateTime;
         var tree = type == ContentType.Post
             ? new BlockTree { Blocks = [new BlockNode { Type = "markdown", Props = BlockOps.ToJson(new MarkdownProps { Markdown = "" }) }] }
@@ -85,7 +110,7 @@ public sealed class ContentService(
             };
         var item = new ContentItem
         {
-            Type = type, GroupId = groupId, Title = title, Slug = slug, DraftBlocks = tree.ToJson(),
+            Type = type, GroupId = groupId, BlogId = blog, Title = title, Slug = slug, DraftBlocks = tree.ToJson(),
             AuthorId = perms.UserId == 0 ? null : perms.UserId, Status = ContentStatus.Draft,
             CreatedAtUtc = now, UpdatedAtUtc = now,
         };
@@ -96,7 +121,7 @@ public sealed class ContentService(
     }
 
     public async Task<ChangeResult> UpdateSettingsAsync(EffectivePermissions perms, int id, string title, string slug, string excerpt,
-        int groupId, string actor, CancellationToken ct = default)
+        int groupId, string actor, int? blogId = null, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var item = await db.ContentItems.FirstOrDefaultAsync(c => c.Id == id, ct) ?? throw new NotFoundException();
@@ -107,20 +132,29 @@ public sealed class ContentService(
         if (title.Length is 0 or > 300) throw new BlockException("The title must be 1 to 300 characters.");
         slug = Slug.From(slug);
         if (slug.Length == 0) throw new BlockException("The slug must contain letters or digits.");
-        if (IsReserved(item.Type, slug)) throw new ConflictException($"The address '/{slug}' is used by the site itself. Choose another one.");
-        if (slug != item.Slug && await db.ContentItems.AnyAsync(c => c.Type == item.Type && c.Slug == slug && c.Id != id, ct))
-            throw new ConflictException($"The address '{slug}' is already used.");
+        var targetBlog = item.Type == ContentType.Post ? blogId ?? item.BlogId : null;
+        if (item.Type == ContentType.Post && targetBlog != item.BlogId)
+        {
+            if (!await db.Blogs.AnyAsync(b => b.Id == targetBlog, ct)) throw new NotFoundException("The blog does not exist.");
+        }
+        if (item.Type == ContentType.Page && slug != item.Slug && await SiteAddresses.WhyTakenAsync(db, slug, exceptPageId: id, ct: ct) is { } why)
+            throw new ConflictException(why + " Choose another one.");
+        if (item.Type == ContentType.Post && (slug != item.Slug || targetBlog != item.BlogId)
+            && await db.ContentItems.AnyAsync(c => c.Type == ContentType.Post && c.BlogId == targetBlog && c.Slug == slug && c.Id != id, ct))
+            throw new ConflictException($"The address '{slug}' is already used by a post in that blog.");
         if (groupId != item.GroupId)
         {
             if (!ContentRules.CanMove(perms, facts, groupId)) throw new AccessDeniedException("You cannot move this item to that group.");
             if (!await db.Groups.AnyAsync(g => g.Id == groupId && g.Valid, ct)) throw new NotFoundException("The group does not exist.");
         }
-        var publicChange = item.Status == ContentStatus.Published && (item.Title != title || item.Slug != slug || item.Excerpt != excerpt.Trim());
+        var publicChange = item.Status == ContentStatus.Published
+            && (item.Title != title || item.Slug != slug || item.Excerpt != excerpt.Trim() || item.BlogId != targetBlog);
         var moved = item.GroupId != groupId;
         item.Title = title;
         item.Slug = slug;
         item.Excerpt = excerpt.Trim().Length > 1000 ? excerpt.Trim()[..1000] : excerpt.Trim();
         item.GroupId = groupId;
+        item.BlogId = targetBlog;
         item.UpdatedAtUtc = time.GetUtcNow().UtcDateTime;
         await SaveAsync(db, ct);
         await audit.WriteAsync(actor, moved ? "content.move" : "content.settings", item.Type.ToString(), id.ToString(),
@@ -270,11 +304,20 @@ public sealed class ContentService(
         catch (DbUpdateConcurrencyException) { throw new ConflictException("Someone else changed this item. Reload and try again."); }
     }
 
-    private static async Task<string> UniqueSlugAsync(AppDbContext db, ContentType type, string slug, int? exceptId, CancellationToken ct)
+    private static async Task<string> UniqueSlugAsync(AppDbContext db, ContentType type, int? blogId, string slug, int? exceptId, CancellationToken ct)
     {
         var candidate = slug;
-        for (var i = 2; IsReserved(type, candidate) || await db.ContentItems.AnyAsync(c => c.Type == type && c.Slug == candidate && c.Id != exceptId, ct); i++)
+        for (var i = 2; ; i++)
+        {
+            var taken = type == ContentType.Page
+                ? await SiteAddresses.WhyTakenAsync(db, candidate, exceptPageId: exceptId, ct: ct) is not null
+                : await db.ContentItems.AnyAsync(c => c.Type == ContentType.Post && c.BlogId == blogId && c.Slug == candidate && c.Id != exceptId, ct);
+            if (!taken) return candidate;
             candidate = $"{slug}-{i}";
-        return candidate;
+        }
     }
 }
+
+/// <summary>Filters, sort and page of the admin content list.</summary>
+public sealed record ContentQuery(ContentType? Type = null, int? GroupId = null, int? BlogId = null, string? Status = null,
+    string? Search = null, string? Sort = null, int? Page = null, int? PageSize = null);

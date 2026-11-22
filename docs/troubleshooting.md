@@ -83,14 +83,16 @@ Common cases:
 - *Someone else saved this page at the same time*: another editor changed it; the editor reloaded their version. Make
   your change again.
 - *Built-in themes are read-only*: duplicate the theme to edit its header, footer or design.
-- The canvas does not react to dragging: reload the page. Dragging is mouse- and touch-based; very fast flicks are
-  ignored.
+- A block dragged from the palette went somewhere else than intended: the drop follows the
+  [nesting rules](admin/blocks.md#nesting-rules), so it moves out of containers that don't accept it. Move it with
+  **↑** / **↓** or by dragging it in Layers.
+- The canvas does not react: reload the editor page.
 
 ## A published page is not reachable
 
-- Check its address in the item settings. A page can never take `admin`, `blog`, `search`, `media`, `theme` or the
-  other site addresses: a page titled *Blog* gets `/blog-2`, and the settings refuse such an address.
-- Pages are at `/<slug>`, posts at `/blog/<slug>`.
+- Check its address in the item settings. A page can never take a blog's address or `admin`, `search`, `media`,
+  `theme` and the other site addresses: a page titled *Blog* gets `/blog-2`, and the settings refuse such an address.
+- Pages are at `/<slug>`, posts at `/<blog>/<slug>`. A post moved to another blog changes its address.
 - Is it still published? *Draft* in the list means it was unpublished.
 
 ## The site still shows the old design or text
@@ -102,8 +104,8 @@ Common cases:
 
 ## Upload refused
 
-- *Only PNG, JPEG, GIF, WebP, AVIF images and PDF files can be uploaded*: the file's content is something else (often
-  SVG or HEIC). Convert it.
+- *Only PNG, JPEG, GIF, WebP, AVIF and ICO images and PDF files can be uploaded*: the file's content is something else
+  (often SVG or HEIC). Convert it.
 - *Files can be at most 20 MiB*.
 - *You cannot upload into that group*: you need `create` on the group.
 

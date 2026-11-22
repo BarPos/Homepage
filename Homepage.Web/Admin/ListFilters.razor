@@ -1,0 +1,24 @@
+@* The filter bar of an admin list: a GET form; htmx swaps only the list below and keeps the URL in sync. *@
+<form class="toolbar filters" method="get" action="@Url.Path" hx-get="@Url.Path" hx-target="@Target" hx-select="@Target" hx-swap="outerHTML"
+      hx-push-url="true" hx-trigger="input changed delay:300ms from:input[type=search], change from:select, submit">
+    <input type="search" name="q" value="@Url["q"]" placeholder="@Placeholder" aria-label="Search" style="max-width:260px" />
+    @ChildContent
+    <select name="size" aria-label="Rows per page" style="max-width:110px">
+        @foreach (var s in Homepage.Common.Paging.PageSizes)
+        {
+            <option value="@s" selected="@(s.ToString() == (Url["size"] is { Length: > 0 } v ? v : Homepage.Common.Paging.DefaultPageSize.ToString()))">@s per page</option>
+        }
+    </select>
+    @if (Url.Values.Any(kv => kv.Key is not ("size" or "page" or "type") && !string.IsNullOrEmpty(kv.Value)))
+    {
+        <a class="btn btn-sm" href="@ClearUrl">Clear filters</a>
+    }
+</form>
+@code {
+    [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
+    [Parameter] public string Placeholder { get; set; } = "Search…";
+    [Parameter] public string Target { get; set; } = "#list";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string ClearUrl => ListUrl.Build(Url.Path, Url.Values.Where(kv => kv.Key is "type").ToDictionary(kv => kv.Key, kv => kv.Value));
+}

@@ -37,7 +37,36 @@ public sealed class MenuService(IDbContextFactory<AppDbContext> dbFactory, IMemo
         return await db.Menus.AsNoTracking().OrderBy(m => m.Key).ToListAsync(ct);
     }
 
-    public async Task SaveAsync(EffectivePermissions p, string key, IReadOnlyList<MenuLink> links, string actor, CancellationToken ct = default)
+    public async Task<Menu> CreateAsync(EffectivePermissions p, string name, string key, string actor, CancellationToken ct = default)
+    {
+        if (!p.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Menus need layout: rw.");
+        name = name.Trim();
+        if (name.Length is 0 or > 100) throw new BlockException("The menu name must be 1 to 100 characters.");
+        key = Slug.From(string.IsNullOrWhiteSpace(key) ? name : key);
+        if (key.Length is 0 or > 50) throw new BlockException("The menu key must be 1 to 50 letters, digits or dashes.");
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (await db.Menus.AnyAsync(m => m.Key == key, ct)) throw new ConflictException($"A menu '{key}' already exists.");
+        var menu = new Menu { Key = key, Name = name, Items = "[]" };
+        db.Menus.Add(menu);
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync(actor, "menu.create", "Menu", key, name, ct: ct);
+        return menu;
+    }
+
+    /// <summary>Deletes a menu. Menu blocks that pointed at it render nothing until they get another menu.</summary>
+    public async Task DeleteAsync(EffectivePermissions p, string key, string actor, CancellationToken ct = default)
+    {
+        if (!p.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Menus need layout: rw.");
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var menu = await db.Menus.FirstOrDefaultAsync(m => m.Key == key, ct) ?? throw new NotFoundException();
+        db.Menus.Remove(menu);
+        await db.SaveChangesAsync(ct);
+        cache.Remove("menu:" + key);
+        await audit.WriteAsync(actor, "menu.delete", "Menu", key, menu.Name, ct: ct);
+    }
+
+    public async Task SaveAsync(EffectivePermissions p, string key, IReadOnlyList<MenuLink> links, string actor, CancellationToken ct = default,
+        string? name = null)
     {
         if (!p.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Menus need layout: rw.");
         var clean = links.Where(l => !string.IsNullOrWhiteSpace(l.Label)).Select(l =>
@@ -48,6 +77,7 @@ public sealed class MenuService(IDbContextFactory<AppDbContext> dbFactory, IMemo
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var menu = await db.Menus.FirstOrDefaultAsync(m => m.Key == key, ct) ?? throw new NotFoundException();
         menu.Items = JsonSerializer.Serialize(clean, Json);
+        if (name?.Trim() is { Length: > 0 and <= 100 } n) menu.Name = n;
         await db.SaveChangesAsync(ct);
         cache.Remove("menu:" + key);
         await audit.WriteAsync(actor, "menu.save", "Menu", key, $"{clean.Count} links", ct: ct);

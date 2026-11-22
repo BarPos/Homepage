@@ -9,12 +9,12 @@
     {
         <div class="card">
             <h2 style="margin-top:0">Create</h2>
-            <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" />
+            <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Blogs="Blogs" />
         </div>
     }
     <div class="card">
         <h2 style="margin-top:0">Recently changed</h2>
-        <ContentTable Items="Recent" Groups="GroupNames" />
+        <ContentTable Items="Recent" Groups="GroupNames" BlogSlugs="BlogSlugs" BlogNames="BlogNames" HomePageId="HomePageId" />
     </div>
 </AdminShell>
 @code {
@@ -22,7 +22,11 @@
     [Parameter] public int Posts { get; set; }
     [Parameter] public int Drafts { get; set; }
     [Parameter] public string ThemeName { get; set; } = "";
-    [Parameter] public List<ContentItem> Recent { get; set; } = [];
+    [Parameter] public IReadOnlyList<ContentItem> Recent { get; set; } = [];
+    [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
+    [Parameter] public int? HomePageId { get; set; }
+    private Dictionary<int, string> BlogSlugs => Blogs.ToDictionary(b => b.Id, b => b.Slug);
+    private Dictionary<int, string> BlogNames => Blogs.ToDictionary(b => b.Id, b => b.Name);
     [Parameter] public Dictionary<int, string> GroupNames { get; set; } = [];
     [Parameter] public List<Group> CreateGroups { get; set; } = [];
     [Parameter] public int? DefaultGroupId { get; set; }

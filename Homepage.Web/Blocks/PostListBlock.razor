@@ -7,7 +7,7 @@
             @foreach (var post in _posts)
             {
                 <li class="post-card">
-                    <h3><a href="/blog/@post.Slug">@post.Title</a></h3>
+                    <h3><a href="@post.Url">@post.Title</a></h3>
                     <div class="post-meta">@post.PublishedAtUtc?.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)</div>
                     @if (p.ShowExcerpt && !string.IsNullOrWhiteSpace(post.Excerpt)) { <p>@post.Excerpt</p> }
                 </li>
@@ -21,8 +21,11 @@
 </div>
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
-    private List<ContentItem>? _posts;
+    private List<PostSummary>? _posts;
 
-    protected override async Task OnInitializedAsync() =>
-        _posts = await Content.LatestPostsAsync(Math.Clamp(Node.PropsAs<PostListProps>().Count, 1, 50));
+    protected override async Task OnInitializedAsync()
+    {
+        var p = Node.PropsAs<PostListProps>();
+        _posts = await Content.LatestPostsAsync(Math.Clamp(p.Count, 1, 50), 0, p.BlogId > 0 ? p.BlogId : null);
+    }
 }

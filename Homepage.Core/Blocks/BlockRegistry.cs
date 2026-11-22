@@ -35,7 +35,7 @@ public static class BlockRegistry
     public static readonly IReadOnlyList<BlockDefinition> All =
     [
         new("section", "Section", BlockCategory.Layout, typeof(SectionProps), "▭", IsContainer: true,
-            AllowedChildren: [.. Content, "columns", "siteheader"], AllowedParents: [""]),
+            AllowedChildren: [.. Content, "columns", "sitebar", "sitebrand"], AllowedParents: [""]),
         new("columns", "Columns", BlockCategory.Layout, typeof(ColumnsProps), "▥", IsContainer: true,
             AllowedChildren: ["column"]),
         new("column", "Column", BlockCategory.Layout, typeof(ColumnProps), "▯", IsContainer: true,
@@ -50,8 +50,11 @@ public static class BlockRegistry
         new("html", "HTML", BlockCategory.Content, typeof(HtmlProps), "</>", RequiredSystemGroup: SystemGroups.Html),
         new("postlist", "Latest posts", BlockCategory.Dynamic, typeof(PostListProps), "☰"),
         new("menu", "Menu", BlockCategory.Site, typeof(MenuProps), "≡"),
-        new("siteheader", "Site header", BlockCategory.Site, typeof(SiteHeaderProps), "⌂",
-            OnlyIn: [TreeKind.Header]),
+        new("sitebar", "Site bar", BlockCategory.Site, typeof(SiteBarProps), "▤", IsContainer: true,
+            AllowedChildren: ["sitebrand", "menu", "button", "spacer", "markdown", "html"],
+            AllowedParents: ["", "section"], OnlyIn: [TreeKind.Header, TreeKind.Footer]),
+        new("sitebrand", "Logo / site name", BlockCategory.Site, typeof(SiteBrandProps), "⌂",
+            OnlyIn: [TreeKind.Header, TreeKind.Footer]),
     ];
 
     private static readonly Dictionary<string, BlockDefinition> ByType = All.ToDictionary(d => d.Type, StringComparer.Ordinal);

@@ -18,7 +18,8 @@ public static class BlockComponents
         ["html"] = typeof(HtmlBlock),
         ["postlist"] = typeof(PostListBlock),
         ["menu"] = typeof(MenuBlock),
-        ["siteheader"] = typeof(SiteHeaderBlock),
+        ["sitebar"] = typeof(SiteBarBlock),
+        ["sitebrand"] = typeof(SiteBrandBlock),
     };
 
     public static Type? Get(string type) => Map.GetValueOrDefault(type);

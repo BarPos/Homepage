@@ -12,6 +12,13 @@
                 <label for="e">Excerpt / description</label>
                 <textarea id="e" name="excerpt" maxlength="1000" disabled="@(!CanEdit)" style="font-family:inherit">@Item.Excerpt</textarea>
                 <div class="help">Used for search engines, social previews and post lists. Generated from the text when empty.</div>
+                @if (Item.Type == ContentType.Post)
+                {
+                    <label for="b">Blog</label>
+                    <select id="b" name="blogId" disabled="@(!CanEdit)">
+                        @foreach (var bl in Blogs) { <option value="@bl.Id" selected="@(bl.Id == Item.BlogId)">@bl.Name (/@bl.Slug)</option> }
+                    </select>
+                }
                 <label for="g">Group</label>
                 <select id="g" name="groupId" disabled="@(!CanEdit)">
                     @foreach (var g in MoveTargets) { <option value="@g.Id" selected="@(g.Id == Item.GroupId)">@g.Name</option> }
@@ -44,6 +51,18 @@
                     }
                 }
             </div>
+            @if (CanSetHome && Item.Type == ContentType.Page && Item.Status == ContentStatus.Published)
+            {
+                <h2>Home page</h2>
+                @if (IsHome) { <p><span class="badge badge-ok">home</span> This page is shown at <code>/</code>.</p> }
+                else
+                {
+                    <form method="post" action="/admin/content/@Item.Id/home">
+                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                        <button>Use as home page</button>
+                    </form>
+                }
+            }
             @if (CanDelete)
             {
                 <h2>Delete</h2>
@@ -68,8 +87,11 @@
     [Parameter] public bool CanPublish { get; set; }
     [Parameter] public bool CanDelete { get; set; }
     [Parameter] public string? Error { get; set; }
+    [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
+    [Parameter] public bool CanSetHome { get; set; }
+    [Parameter] public bool IsHome { get; set; }
     [CascadingParameter] public HttpContext? HttpContext { get; set; }
-    private string PublicUrl => (Item.Type == ContentType.Post ? "/blog/" : "/") + Item.Slug;
+    private string PublicUrl => PublicContent.Url(Item.Type, Item.Slug, Item.BlogId, Blogs.ToDictionary(b => b.Id, b => b.Slug));
     private string StatusText => Item.Status == ContentStatus.Published ? "Published" : "Draft";
     private string FirstPublished => Item.PublishedAtUtc is { } p ? "· first published " + p.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "";
     private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";

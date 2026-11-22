@@ -156,7 +156,7 @@ public class BlockTests
         var heading = ops.Insert("heading", section, 0);
         Assert.Throws<BlockException>(() => ops.Insert("markdown", heading, 0));     // not a container
         Assert.Throws<BlockException>(() => ops.Move(section, section, 0));          // into itself
-        Assert.Throws<BlockException>(() => ops.Insert("siteheader", null, 0));      // header-only block
+        Assert.Throws<BlockException>(() => ops.Insert("sitebrand", null, 0));       // header/footer-only block
     }
 
     [Fact]
@@ -242,7 +242,22 @@ public class ContentMigrationTests
     {
         Assert.Throws<InvalidDataException>(() => ContentMigrator.Default.MigrateJson("""{"schemaVersion":99,"blocks":[]}"""));
         Assert.Throws<InvalidDataException>(() => new ContentMigrator([], 3).MigrateJson("""{"schemaVersion":1,"blocks":[]}"""));
-        Assert.Null(ContentMigrator.Default.MigrateJson("""{"schemaVersion":1,"blocks":[]}"""));
+        Assert.Null(ContentMigrator.Default.MigrateJson($$"""{"schemaVersion":{{BlockTree.CurrentSchemaVersion}},"blocks":[]}"""));
+    }
+
+    /// <summary>Golden schema-1 header (as stored by release 0.1.0): migrates and validates.</summary>
+    [Fact]
+    public void V1HeaderMigratesToAnEditableSiteBar()
+    {
+        const string v1 = """{"schemaVersion":1,"blocks":[{"id":"bf00000001","type":"siteheader","props":{"menuKey":"main","showTagline":true},"children":[]}]}""";
+        var migrated = ContentMigrator.Default.MigrateJson(v1)!;
+        var tree = BlockTree.Parse(migrated);
+        Assert.Equal(2, tree.SchemaVersion);
+        var bar = tree.Blocks.Single();
+        Assert.Equal(("bf00000001", "sitebar"), (bar.Id, bar.Type));
+        Assert.Equal("main", bar.Children[1].PropsAs<MenuProps>().MenuKey);
+        Assert.Empty(BlockValidator.Validate(tree, TreeKind.Header));
+        Assert.Null(ContentMigrator.Default.MigrateJson(migrated));
     }
 }
 

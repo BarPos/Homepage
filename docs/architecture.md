@@ -59,8 +59,10 @@ The format is described in [Content format](reference/content-format.md).
 
 ```
 Editor page (admin)                         Canvas (iframe, same origin)
- ├─ palette, layers tree ── SortableJS        └─ the real page in edit mode: blocks wrapped
- ├─ inspector form ── htmx, 0.5 s debounce        with data-block-id, lists are drop zones
+ ├─ palette ── pointer drag onto the canvas   └─ the real page in edit mode: blocks wrapped
+ │            or the layers tree
+ ├─ layers tree ── SortableJS (reorder)          with data-block-id, lists are drop zones
+ ├─ inspector form ── htmx, 0.5 s debounce
  └─ editor.js ── POST /admin/editor/{target}/ops   (SortableJS inside the canvas)
                  GET  …/tree, …/layers  ← re-rendered by the server after every change
 ```
@@ -86,6 +88,6 @@ The main tables:
 - **Accounts:** `users` (ASP.NET Core Identity, without Identity roles), `user_claims`, `user_logins`, `user_tokens`.
 - **Permissions:** `groups`, `roles`, `user_groups`, `role_groups`, `user_roles`.
 - **Content:** `content_items` (pages and posts, draft and published trees, a generated `tsvector` for search),
-  `revisions`, `media`, `menus`.
+  `blogs`, `revisions`, `media`, `menus`.
 - **Design:** `themes`.
 - **Administration:** `settings`, `audit_log`, `update_runs`.

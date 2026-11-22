@@ -20,3 +20,9 @@
 .hp-canvas .hp-block > .blk:last-child{margin-bottom:var(--space)}
 .hp-canvas .hp-block:last-child > .blk:last-child{margin-bottom:0}
 .hp-canvas [data-region] > .hp-list[data-parent=""],.hp-canvas .post-body > .hp-list[data-parent=""]{min-height:160px}
+/* the site bar is a flex row: its wrapped children must stay flex items */
+.hp-canvas .site-bar-inner.hp-list{min-height:44px}
+.hp-canvas .site-bar-inner > .hp-block{display:flex;align-items:center}
+/* drop indicator for blocks dragged in from the palette */
+.hp-drop-line{position:fixed;z-index:1000;background:#3156d3;border-radius:2px;pointer-events:none;box-shadow:0 0 0 2px rgb(49 86 211 / .25)}
+.hp-drop-target{outline:2px dashed #3156d3 !important;outline-offset:-2px}

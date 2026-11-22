@@ -13,6 +13,10 @@ public sealed class ThemeColorAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class MediaPickerAttribute : Attribute;
 
+/// <summary>A blog id; 0 = all blogs (rendered as a select of blogs).</summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class BlogPickerAttribute : Attribute;
+
 /// <summary>A menu key (rendered as a select of menus).</summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class MenuPickerAttribute : Attribute;
@@ -40,6 +44,9 @@ public enum ColumnRatio { Equal, OneTwo, TwoOne, OneThree, ThreeOne }
 public enum ButtonStyle { Primary, Secondary, Outline }
 public enum ImageWidth { Normal, Wide, Full }
 public enum PostListLayout { List, Grid }
+public enum BarStyle { Glass, Solid, Transparent }
+public enum BarJustify { Spread, Start, Center, End }
+public enum BrandDisplay { LogoAndText, LogoOnly, TextOnly }
 
 public sealed class SectionProps
 {
@@ -105,15 +112,27 @@ public sealed class HtmlProps
 
 public sealed class PostListProps
 {
+    [Display(Name = "Blog"), BlogPicker] public int BlogId { get; set; }
     [Display(Name = "Number of posts"), Range(1, 50)] public int Count { get; set; } = 5;
     [Display(Name = "Layout")] public PostListLayout Layout { get; set; } = PostListLayout.List;
     [Display(Name = "Show excerpts")] public bool ShowExcerpt { get; set; } = true;
 }
 
-public sealed class SiteHeaderProps
+/// <summary>The bar at the top (or bottom) of the site: a row holding the brand, menus and buttons.</summary>
+public sealed class SiteBarProps
 {
-    [Display(Name = "Menu"), MenuPicker] public string MenuKey { get; set; } = "main";
-    [Display(Name = "Show tagline")] public bool ShowTagline { get; set; }
+    [Display(Name = "Stay on top while scrolling")] public bool Sticky { get; set; } = true;
+    [Display(Name = "Style")] public BarStyle Style { get; set; } = BarStyle.Glass;
+    [Display(Name = "Arrange items")] public BarJustify Justify { get; set; } = BarJustify.Spread;
+}
+
+/// <summary>The site's logo and/or name, linking to the home page.</summary>
+public sealed class SiteBrandProps
+{
+    [Display(Name = "Show")] public BrandDisplay Display { get; set; } = BrandDisplay.LogoAndText;
+    [Display(Name = "Text (empty = site title)"), StringLength(100)] public string Text { get; set; } = "";
+    [Display(Name = "Show tagline")] public bool ShowTagline { get; set; } = true;
+    [Display(Name = "Logo height (px)"), Range(16, 120)] public int LogoHeight { get; set; } = 32;
 }
 
 public sealed class MenuProps

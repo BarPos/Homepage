@@ -83,70 +83,75 @@ public static class AdminEndpoints
             return Results.Redirect("/admin/login");
         });
 
-        admin.MapGet("", async (HttpContext http, ContentService content, ThemeService themes, IDbContextFactory<AppDbContext> dbf) =>
+        admin.MapGet("", async (HttpContext http, ContentService content, ThemeService themes, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
         {
             var a = AdminContext.Get(http);
-            var items = await content.ListAsync(a.Perms, null, null, null, 1000);
+            var (pages, posts, drafts) = await content.CountsAsync(a.Perms);
+            var recent = await content.ListAsync(a.Perms, new ContentQuery(PageSize: 10));
             await using var db = await dbf.CreateDbContextAsync();
             var groups = await db.Groups.AsNoTracking().ToListAsync();
             var site = await SiteSettings.LoadAsync(db);
             return Html.Render<DashboardPage>(new
             {
-                Pages = items.Count(i => i.Type == ContentType.Page),
-                Posts = items.Count(i => i.Type == ContentType.Post),
-                Drafts = items.Count(i => i.Status == ContentStatus.Draft),
+                Pages = pages, Posts = posts, Drafts = drafts,
                 ThemeName = (await themes.GetActiveAsync()).Name,
-                Recent = items.Take(8).ToList(),
+                Recent = recent.Items,
                 GroupNames = groups.ToDictionary(g => g.Id, g => g.Name),
                 CreateGroups = CreatableGroups(a.Perms, groups),
                 DefaultGroupId = site.DefaultGroupId,
+                Blogs = await blogs.AllAsync(),
+                HomePageId = site.HomePageId,
             });
         });
 
         // ---------------------------------------------------------------- content
-        admin.MapGet("/content", async (HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf,
-            string? type, string? groupId, string? q) =>
+        admin.MapGet("/content", async (HttpContext http, HttpRequest req, ContentService content, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
         {
             var a = AdminContext.Get(http);
-            var gid = int.TryParse(groupId, out var g) ? g : (int?)null;
-            var t = Enum.TryParse<ContentType>(type, ignoreCase: true, out var parsed) ? parsed : ContentType.Page;
-            var items = await content.ListAsync(a.Perms, t, gid, q);
+            var url = ListUrl.From(req, "type", "q", "group", "blog", "status", "sort", "size", "page");
+            var t = Enum.TryParse<ContentType>(url["type"], ignoreCase: true, out var parsed) ? parsed : ContentType.Page;
+            var result = await content.ListAsync(a.Perms, new ContentQuery(t, Int(url["group"]), Int(url["blog"]), url["status"], url["q"], url["sort"],
+                Int(url["page"]), Int(url["size"])));
             await using var db = await dbf.CreateDbContextAsync();
             var groups = await db.Groups.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
             var visible = a.Perms.GroupsWith(Perm.Ro).ToHashSet();
+            var site = await SiteSettings.LoadAsync(db);
             return Html.Render<ContentListPage>(new
             {
-                Type = t, Items = items, Search = q, GroupId = gid,
+                Type = t, Result = result, Url = url,
                 Groups = groups.Where(x => visible.Contains(x.Id) && !x.IsSystem).ToDictionary(x => x.Id, x => x.Name),
                 CreateGroups = CreatableGroups(a.Perms, groups),
-                DefaultGroupId = (await SiteSettings.LoadAsync(db)).DefaultGroupId,
+                Blogs = await blogs.AllAsync(),
+                DefaultGroupId = site.DefaultGroupId,
+                HomePageId = site.HomePageId,
             });
         });
 
         admin.MapPost("/content/new", async (HttpContext http, ContentService content,
-            [FromForm] string title, [FromForm] string type, [FromForm] int groupId) =>
+            [FromForm] string title, [FromForm] string type, [FromForm] int groupId, [FromForm] int? blogId) =>
         {
             var a = AdminContext.Get(http);
             var t = Enum.TryParse<ContentType>(type, ignoreCase: true, out var parsed) ? parsed : throw new BlockException("Unknown content type.");
-            var item = await content.CreateAsync(a.Perms, t, title, groupId, a.Actor);
+            var item = await content.CreateAsync(a.Perms, t, title, groupId, a.Actor, t == ContentType.Post ? blogId : null);
             return Results.Redirect($"/admin/editor/content-{item.Id}");
         });
 
-        admin.MapGet("/content/{id:int}", async (int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf) =>
-            await ContentSettings(id, http, content, dbf, null));
+        admin.MapGet("/content/{id:int}", async (int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf, BlogService blogs) =>
+            await ContentSettings(id, http, content, dbf, blogs, null));
 
         admin.MapPost("/content/{id:int}", async (int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf,
-            IOutputCacheStore cache, [FromForm] string title, [FromForm] string slug, [FromForm] string? excerpt, [FromForm] int groupId) =>
+            IOutputCacheStore cache, BlogService blogs, [FromForm] string title, [FromForm] string slug, [FromForm] string? excerpt, [FromForm] int groupId,
+            [FromForm] int? blogId) =>
         {
             var a = AdminContext.Get(http);
             try
             {
-                var r = await content.UpdateSettingsAsync(a.Perms, id, title, slug, excerpt ?? "", groupId, a.Actor);
+                var r = await content.UpdateSettingsAsync(a.Perms, id, title, slug, excerpt ?? "", groupId, a.Actor, blogId);
                 if (r.AffectsSite) await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             }
             catch (Exception ex) when (ex is BlockException or ConflictException)
             {
-                return await ContentSettings(id, http, content, dbf, ex.Message);
+                return await ContentSettings(id, http, content, dbf, blogs, ex.Message);
             }
             return Results.Redirect($"/admin/content/{id}");
         });
@@ -157,6 +162,21 @@ public static class AdminEndpoints
             await content.PublishAsync(a.Perms, id, a.Actor);
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             if (http.Request.Headers.ContainsKey("HX-Request")) { Flash.Ok(http.Response, "Published."); return Results.NoContent(); }
+            return Results.Redirect($"/admin/content/{id}");
+        });
+
+        admin.MapPost("/content/{id:int}/home", async (int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf,
+            IOutputCacheStore cache, IAuditLog audit) =>
+        {
+            var a = AdminContext.Get(http);
+            if (!a.Perms.IsAdmin) throw new AccessDeniedException("Choosing the home page needs admin: rw.");
+            var item = await content.GetForViewAsync(a.Perms, id);
+            if (item.Type != ContentType.Page || item.Status != ContentStatus.Published) throw new BlockException("Only a published page can be the home page.");
+            await using var db = await dbf.CreateDbContextAsync();
+            await SiteSettings.SetAsync(db, SiteSettings.HomePageKey, id.ToString());
+            await db.SaveChangesAsync();
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+            await audit.WriteAsync(a.Actor, "settings.home", "Page", id.ToString(), item.Title);
             return Results.Redirect($"/admin/content/{id}");
         });
 
@@ -226,7 +246,7 @@ public static class AdminEndpoints
         });
 
         admin.MapGet("/editor/{target}/inspector/{blockId}", async (string target, string blockId, HttpContext http, ContentService content,
-            MediaService media, MenuService menus) =>
+            MediaService media, MenuService menus, BlogService blogs) =>
         {
             var a = AdminContext.Get(http);
             var doc = await content.LoadDocumentAsync(a.Perms, ParseTarget(target));
@@ -236,7 +256,7 @@ public static class AdminEndpoints
             return Html.Render<Inspector>(new
             {
                 Node = node, Target = doc.Target, CanEdit = canEdit,
-                Media = await media.ListAsync(a.Perms), Menus = await menus.ListAsync(),
+                Media = await media.ListAsync(a.Perms), Menus = await menus.ListAsync(), Blogs = await blogs.AllAsync(),
             });
         });
 
@@ -273,16 +293,19 @@ public static class AdminEndpoints
         });
 
         // ---------------------------------------------------------------- media
-        admin.MapGet("/media", async (HttpContext http, MediaService media, IDbContextFactory<AppDbContext> dbf) =>
+        admin.MapGet("/media", async (HttpContext http, HttpRequest req, MediaService media, IDbContextFactory<AppDbContext> dbf) =>
         {
             var a = AdminContext.Get(http);
+            var url = ListUrl.From(req, "q", "group", "kind", "size", "page");
             await using var db = await dbf.CreateDbContextAsync();
             var groups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync();
+            var visible = a.Perms.GroupsWith(Perm.Ro).ToHashSet();
             return Html.Render<MediaPage>(new
             {
-                Items = await media.ListAsync(a.Perms),
+                Result = await media.QueryAsync(a.Perms, url["q"], Int(url["group"]), url["kind"], Int(url["page"]), Int(url["size"])),
+                Url = url,
                 UploadGroups = CreatableGroups(a.Perms, groups),
-                Groups = groups.ToDictionary(g => g.Id, g => g.Name),
+                Groups = groups.Where(g => visible.Contains(g.Id) && !g.IsSystem).ToDictionary(g => g.Id, g => g.Name),
             });
         });
 
@@ -298,10 +321,12 @@ public static class AdminEndpoints
             return Results.Redirect("/admin/media");
         }).WithMetadata(new RequestSizeLimitAttribute(MediaService.MaxBytes * 5));
 
-        admin.MapPost("/media/{id:int}/delete", async (int id, HttpContext http, MediaService media) =>
+        admin.MapPost("/media/{id:int}/delete", async (int id, HttpContext http, MediaService media, PublicContent pub, IOutputCacheStore cache) =>
         {
             var a = AdminContext.Get(http);
             await media.DeleteAsync(a.Perms, id, a.Actor);
+            pub.ForgetMedia(id);
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default); // pages, logo or favicon may have shown it
             return Results.Redirect("/admin/media");
         });
 
@@ -390,10 +415,26 @@ public static class AdminEndpoints
         });
 
         // ---------------------------------------------------------------- menus
-        admin.MapGet("/menus", async (HttpContext http, MenuService menus) =>
+        admin.MapGet("/menus", async (HttpContext http, MenuService menus, string? error) =>
         {
             if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Menus need layout: rw.");
-            return Html.Render<MenusPage>(new { Menus = await menus.ListAsync() });
+            return Html.Render<MenusPage>(new { Menus = await menus.ListAsync(), Error = error });
+        });
+
+        admin.MapPost("/menus", async (HttpContext http, MenuService menus, [FromForm] string name, [FromForm] string? key) =>
+        {
+            var a = AdminContext.Get(http);
+            try { await menus.CreateAsync(a.Perms, name, key ?? "", a.Actor); }
+            catch (Exception ex) when (ex is BlockException or ConflictException) { return Results.Redirect("/admin/menus?error=" + Uri.EscapeDataString(ex.Message)); }
+            return Results.Redirect("/admin/menus");
+        });
+
+        admin.MapPost("/menus/{key}/delete", async (string key, HttpContext http, MenuService menus, IOutputCacheStore cache) =>
+        {
+            var a = AdminContext.Get(http);
+            await menus.DeleteAsync(a.Perms, key, a.Actor);
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+            return Results.Redirect("/admin/menus");
         });
 
         admin.MapPost("/menus/{key}", async (string key, HttpContext http, MenuService menus, IOutputCacheStore cache) =>
@@ -403,9 +444,39 @@ public static class AdminEndpoints
             var labels = form["label"];
             var urls = form["url"];
             var links = labels.Select((l, i) => new MenuLink(l ?? "", i < urls.Count ? urls[i] ?? "" : "")).ToList();
-            await menus.SaveAsync(a.Perms, key, links, a.Actor);
+            try { await menus.SaveAsync(a.Perms, key, links, a.Actor, name: form["name"].ToString()); }
+            catch (BlockException ex) { return Results.Redirect("/admin/menus?error=" + Uri.EscapeDataString(ex.Message)); }
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             return Results.Redirect("/admin/menus");
+        });
+
+        // ---------------------------------------------------------------- blogs (layout: rw)
+        admin.MapGet("/blogs", async (HttpContext http, BlogService blogs, IDbContextFactory<AppDbContext> dbf, string? error) =>
+        {
+            if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Blogs need layout: rw.");
+            await using var db = await dbf.CreateDbContextAsync();
+            var counts = await db.ContentItems.Where(c => c.BlogId != null).GroupBy(c => c.BlogId!.Value)
+                .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
+            return Html.Render<BlogsPage>(new { Blogs = await blogs.AllAsync(), PostCounts = counts, HomeBlogId = (await SiteSettings.LoadAsync(db)).HomeBlogId, Error = error });
+        });
+
+        admin.MapPost("/blogs", async (HttpContext http, BlogService blogs, IOutputCacheStore cache, [FromForm] int? id, [FromForm] string name,
+            [FromForm] string slug, [FromForm] string? description, [FromForm] int? postsPerPage) =>
+        {
+            var a = AdminContext.Get(http);
+            try { await blogs.SaveAsync(a.Perms, id, name, slug, description ?? "", postsPerPage ?? 10, a.Actor); }
+            catch (Exception ex) when (ex is BlockException or ConflictException) { return Results.Redirect("/admin/blogs?error=" + Uri.EscapeDataString(ex.Message)); }
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+            return Results.Redirect("/admin/blogs");
+        });
+
+        admin.MapPost("/blogs/{id:int}/delete", async (int id, HttpContext http, BlogService blogs, IOutputCacheStore cache) =>
+        {
+            var a = AdminContext.Get(http);
+            try { await blogs.DeleteAsync(a.Perms, id, a.Actor); }
+            catch (ConflictException ex) { return Results.Redirect("/admin/blogs?error=" + Uri.EscapeDataString(ex.Message)); }
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+            return Results.Redirect("/admin/blogs");
         });
 
         MapAccess(admin);
@@ -420,15 +491,28 @@ public static class AdminEndpoints
             if (!AdminContext.Get(http).Perms.IsAdmin) throw new AccessDeniedException("This needs admin: rw.");
         }
 
-        admin.MapGet("/users", async (HttpContext http, IDbContextFactory<AppDbContext> dbf, string? error) =>
+        admin.MapGet("/users", async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf, string? error) =>
         {
             RequireAdmin(http);
+            var url = ListUrl.From(req, "q", "status", "role", "size", "page");
             await using var db = await dbf.CreateDbContextAsync();
-            var users = await db.Users.AsNoTracking().OrderBy(u => u.UserName).ToListAsync();
-            var roles = await (from ur in db.UserRoles join r in db.PermissionRoles on ur.RoleId equals r.Id select new { ur.UserId, r.Name }).ToListAsync();
+            var q = db.Users.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(url["q"]))
+            {
+                var like = Paging.Like(url["q"]!);
+                q = q.Where(u => EF.Functions.ILike(u.UserName!, like) || EF.Functions.ILike(u.DisplayName, like));
+            }
+            if (url["status"] == "valid") q = q.Where(u => u.Valid);
+            else if (url["status"] == "invalid") q = q.Where(u => !u.Valid);
+            if (Int(url["role"]) is { } rid) q = q.Where(u => db.UserRoles.Any(ur => ur.UserId == u.Id && ur.RoleId == rid));
+            var result = await q.OrderBy(u => u.UserName).ToPageAsync(Int(url["page"]), Int(url["size"]));
+            var ids = result.Items.Select(u => u.Id).ToList();
+            var roles = await (from ur in db.UserRoles join r in db.PermissionRoles on ur.RoleId equals r.Id where ids.Contains(ur.UserId)
+                               select new { ur.UserId, r.Name }).ToListAsync();
             return Html.Render<UsersPage>(new
             {
-                Users = users,
+                Result = result, Url = url,
+                Roles = await db.PermissionRoles.AsNoTracking().OrderBy(r => r.Name).ToListAsync(),
                 RolesByUser = roles.GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => g.Select(x => x.Name).Order().ToList()),
                 Error = error,
             });
@@ -483,14 +567,30 @@ public static class AdminEndpoints
         foreach (var kind in new[] { "groups", "roles" })
         {
             var roles = kind == "roles";
-            admin.MapGet("/" + kind, async (HttpContext http, IDbContextFactory<AppDbContext> dbf, string? error) =>
+            admin.MapGet("/" + kind, async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf, string? error) =>
             {
                 RequireAdmin(http);
+                var url = ListUrl.From(req, "q", "status", "size", "page");
+                var like = string.IsNullOrWhiteSpace(url["q"]) ? null : Paging.Like(url["q"]!);
+                bool? valid = url["status"] switch { "valid" => true, "invalid" => false, _ => null };
                 await using var db = await dbf.CreateDbContextAsync();
-                var rows = roles
-                    ? (await db.PermissionRoles.AsNoTracking().OrderBy(r => r.Name).ToListAsync()).Select(r => new GroupsPage.Row(r.Id, r.Name, r.Comment, r.Valid, false)).ToList()
-                    : (await db.Groups.AsNoTracking().OrderByDescending(g => g.IsSystem).ThenBy(g => g.Name).ToListAsync()).Select(g => new GroupsPage.Row(g.Id, g.Name, g.Comment, g.Valid, g.IsSystem)).ToList();
-                return Html.Render<GroupsPage>(new { Rows = rows, IsRoles = roles, Error = error });
+                PagedResult<GroupsPage.Row> result;
+                if (roles)
+                {
+                    var q = db.PermissionRoles.AsNoTracking().AsQueryable();
+                    if (like is not null) q = q.Where(r => EF.Functions.ILike(r.Name, like) || EF.Functions.ILike(r.Comment, like));
+                    if (valid is { } v) q = q.Where(r => r.Valid == v);
+                    result = await q.OrderBy(r => r.Name).Select(r => new GroupsPage.Row(r.Id, r.Name, r.Comment, r.Valid, false)).ToPageAsync(Int(url["page"]), Int(url["size"]));
+                }
+                else
+                {
+                    var q = db.Groups.AsNoTracking().AsQueryable();
+                    if (like is not null) q = q.Where(g => EF.Functions.ILike(g.Name, like) || EF.Functions.ILike(g.Comment, like));
+                    if (valid is { } v) q = q.Where(g => g.Valid == v);
+                    result = await q.OrderByDescending(g => g.IsSystem).ThenBy(g => g.Name)
+                        .Select(g => new GroupsPage.Row(g.Id, g.Name, g.Comment, g.Valid, g.IsSystem)).ToPageAsync(Int(url["page"]), Int(url["size"]));
+                }
+                return Html.Render<GroupsPage>(new { Result = result, Url = url, IsRoles = roles, Error = error });
             });
             admin.MapPost("/" + kind, async (HttpContext http, PermissionAdminService svc, [FromForm] int? id, [FromForm] string name,
                 [FromForm] string? comment, [FromForm] bool? valid) =>
@@ -576,7 +676,7 @@ public static class AdminEndpoints
 
     private static void MapSettings(RouteGroupBuilder admin)
     {
-        admin.MapGet("/settings", async (HttpContext http, IDbContextFactory<AppDbContext> dbf, ServerUpdateService updates, string? message) =>
+        admin.MapGet("/settings", async (HttpContext http, IDbContextFactory<AppDbContext> dbf, ServerUpdateService updates, BlogService blogs, string? message) =>
         {
             if (!AdminContext.Get(http).Perms.IsAdmin) throw new AccessDeniedException("This needs admin: rw.");
             await using var db = await dbf.CreateDbContextAsync();
@@ -585,13 +685,16 @@ public static class AdminEndpoints
                 S = await SiteSettings.LoadAsync(db),
                 Pages = await db.ContentItems.AsNoTracking().Where(c => c.Type == ContentType.Page && c.Status == ContentStatus.Published).OrderBy(c => c.Title).ToListAsync(),
                 Groups = await db.Groups.AsNoTracking().Where(g => !g.IsSystem && g.Valid).OrderBy(g => g.Name).ToListAsync(),
+                Blogs = await blogs.AllAsync(),
+                Images = await db.Media.AsNoTracking().Where(m => m.ContentType.StartsWith("image/")).OrderBy(m => m.FileName).Take(1000).ToListAsync(),
                 Update = await updates.GetStatusAsync(),
                 Message = message,
             });
         });
 
         admin.MapPost("/settings", async (HttpContext http, IDbContextFactory<AppDbContext> dbf, IOutputCacheStore cache, IAuditLog audit,
-            [FromForm] string title, [FromForm] string? tagline, [FromForm] string? baseUrl, [FromForm] string? homePageId, [FromForm] string? defaultGroupId) =>
+            [FromForm] string title, [FromForm] string? tagline, [FromForm] string? baseUrl, [FromForm] string? home, [FromForm] string? defaultGroupId,
+            [FromForm] string? logoMediaId, [FromForm] string? faviconMediaId) =>
         {
             var a = AdminContext.Get(http);
             if (!a.Perms.IsAdmin) throw new AccessDeniedException("This needs admin: rw.");
@@ -602,7 +705,16 @@ public static class AdminEndpoints
             await SiteSettings.SetAsync(db, SiteSettings.TitleKey, Clip(title, 200));
             await SiteSettings.SetAsync(db, SiteSettings.TaglineKey, Clip(tagline ?? "", 300));
             await SiteSettings.SetAsync(db, SiteSettings.BaseUrlKey, url);
-            await SiteSettings.SetAsync(db, SiteSettings.HomePageKey, int.TryParse(homePageId, out var h) ? h.ToString() : "");
+            // "page:12" or "blog:3": a page, or a blog's post list.
+            var (homeKind, homeId) = home?.Split(':') is [var k, var v] && int.TryParse(v, out var hid) ? (k, hid) : ("", 0);
+            await SiteSettings.SetAsync(db, SiteSettings.HomePageKey, homeKind == "page" ? homeId.ToString() : "");
+            await SiteSettings.SetAsync(db, SiteSettings.HomeBlogKey, homeKind == "blog" ? homeId.ToString() : "");
+            foreach (var (key, value) in new[] { (SiteSettings.LogoKey, logoMediaId), (SiteSettings.FaviconKey, faviconMediaId) })
+            {
+                int? mid = int.TryParse(value, out var m) ? m : null;
+                if (mid is { } id && !await db.Media.AnyAsync(x => x.Id == id && x.ContentType.StartsWith("image/"))) throw new BlockException("Choose an image from Media.");
+                await SiteSettings.SetAsync(db, key, mid?.ToString() ?? "");
+            }
             if (int.TryParse(defaultGroupId, out var g)) await SiteSettings.SetAsync(db, SiteSettings.DefaultGroupKey, g.ToString());
             await db.SaveChangesAsync();
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
@@ -627,16 +739,30 @@ public static class AdminEndpoints
             return Results.Redirect("/admin/settings?message=" + Uri.EscapeDataString("Update staged. The site restarts in a moment."));
         });
 
-        admin.MapGet("/audit", async (HttpContext http, IDbContextFactory<AppDbContext> dbf) =>
+        admin.MapGet("/audit", async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf) =>
         {
             if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Audit, Perm.Ro)) throw new AccessDeniedException("The audit log needs audit: ro.");
+            var url = ListUrl.From(req, "q", "area", "from", "to", "size", "page");
             await using var db = await dbf.CreateDbContextAsync();
-            return Html.Render<AuditPage>(new { Entries = await db.AuditLog.AsNoTracking().OrderByDescending(x => x.Id).Take(500).ToListAsync() });
+            var q = db.AuditLog.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(url["q"]))
+            {
+                var like = Paging.Like(url["q"]!);
+                q = q.Where(x => EF.Functions.ILike(x.Actor, like) || EF.Functions.ILike(x.Action, like) || EF.Functions.ILike(x.Details, like)
+                                 || EF.Functions.ILike(x.EntityId, like) || (x.Ip != null && EF.Functions.ILike(x.Ip, like)));
+            }
+            if (url["area"] is { Length: > 0 } area && AuditPage.Areas.Any(x => x.Key == area)) q = q.Where(x => x.Action.StartsWith(area));
+            if (DateTime.TryParse(url["from"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeLocal, out var from))
+                q = q.Where(x => x.AtUtc >= from.ToUniversalTime());
+            if (DateTime.TryParse(url["to"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeLocal, out var to))
+                q = q.Where(x => x.AtUtc < to.AddDays(1).ToUniversalTime());
+            return Html.Render<AuditPage>(new { Result = await q.OrderByDescending(x => x.Id).ToPageAsync(Int(url["page"]), Int(url["size"])), Url = url });
         });
     }
 
     // ---------------------------------------------------------------- helpers
-    private static async Task<IResult> ContentSettings(int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf, string? error)
+    private static async Task<IResult> ContentSettings(int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf,
+        BlogService blogs, string? error)
     {
         var a = AdminContext.Get(http);
         var item = await content.GetForViewAsync(a.Perms, id);
@@ -652,6 +778,9 @@ public static class AdminEndpoints
             CanPublish = ContentRules.CanPublish(a.Perms, facts),
             CanDelete = ContentRules.CanDelete(a.Perms, facts),
             Error = error,
+            Blogs = await blogs.AllAsync(),
+            CanSetHome = a.Perms.IsAdmin,
+            IsHome = (await SiteSettings.LoadAsync(db)).HomePageId == id,
         }, error is null ? 200 : 400);
     }
 
@@ -662,6 +791,8 @@ public static class AdminEndpoints
         EditorTarget.TryParse(s, out var t) ? t.Value : throw new NotFoundException();
 
     private static string? Do(Action a) { a(); return null; }
+
+    private static int? Int(string? s) => int.TryParse(s, out var v) ? v : null;
 
     private static string Clip(string s, int max) { s = s.Trim(); return s.Length <= max ? s : s[..max]; }
 

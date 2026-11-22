@@ -27,14 +27,14 @@
             {
                 <div class="ed-panel">
                     <h3>Blocks</h3>
-                    <div class="help" style="margin-bottom:8px">Drag into the layers below, or click to add after the selected block.</div>
+                    <div class="help" style="margin-bottom:8px">Drag onto the page or into Layers, or click to add after the selected block.</div>
                     @foreach (var cat in Palette.GroupBy(d => d.Category))
                     {
                         <div class="muted small" style="margin:8px 0 4px">@cat.Key</div>
                         <ul class="palette">
                             @foreach (var d in cat)
                             {
-                                <li data-type="@d.Type" title="@d.Label"><span class="ic">@d.Icon</span>@d.Label</li>
+                                <li data-type="@d.Type" title="Drag onto the page or into Layers, or click to add" tabindex="0"><span class="ic">@d.Icon</span>@d.Label</li>
                             }
                         </ul>
                     }
@@ -52,11 +52,16 @@
             <div class="ed-panel inspector" id="inspector"><div class="empty">Select a block to edit its settings.</div></div>
         </aside>
     </div>
+    @* Nesting rules for the drag preview (the server enforces them again). Not executed: application/json. *@
+    <script type="application/json" id="block-rules">@((MarkupString)RulesJson)</script>
     </ChildContent>
 </AdminShell>
 @code {
     [Parameter, EditorRequired] public EditorDocument Doc { get; set; } = default!;
     [Parameter] public List<BlockDefinition> Palette { get; set; } = [];
     [Parameter] public string BackUrl { get; set; } = "/admin";
+    private static string RulesJson => System.Text.Json.JsonSerializer.Serialize(
+        BlockRegistry.All.ToDictionary(d => d.Type, d => new { container = d.IsContainer, children = d.AllowedChildren, parents = d.AllowedParents }))
+        .Replace("<", "\\u003c");
     private string Region => Doc.Target.Kind == EditorTarget.ContentKind ? "main" : Doc.Target.Kind;
 }

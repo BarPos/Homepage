@@ -1,3 +1,4 @@
+@inject PublicContent Content
 @* The whole public HTML document: theme CSS, header tree, main content, footer tree.
    The editor canvas renders exactly this with Ctx.Edit = true for the edited region. *@
 <!DOCTYPE html>
@@ -13,7 +14,8 @@
     <meta property="og:site_name" content="@Ctx.Site.Title" />
     @if (!string.IsNullOrWhiteSpace(Description)) { <meta property="og:description" content="@Description" /> }
     @if (!string.IsNullOrWhiteSpace(CanonicalUrl)) { <link rel="canonical" href="@CanonicalUrl" /> }
-    <link rel="alternate" type="application/rss+xml" title="@Ctx.Site.Title" href="/feed.xml" />
+    <link rel="alternate" type="application/rss+xml" title="@Ctx.Site.Title" href="@(FeedUrl ?? "/feed.xml")" />
+    @if (_favicon is not null) { <link rel="icon" href="@_favicon" /> }
     @if (ThemeCssInline is not null)
     {
         <style id="hp-theme">@((MarkupString)ThemeCssInline)</style>
@@ -66,7 +68,15 @@
     /// <summary>Theme editor preview: tokens inline so unsaved values can be shown.</summary>
     [Parameter] public string? ThemeCssInline { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+    /// <summary>The RSS feed for this page (a blog's own feed on blog pages).</summary>
+    [Parameter] public string? FeedUrl { get; set; }
     [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
     private RenderContext MainCtx => Ctx.ForRegion("main");
     private string GlassAttr => Ctx.Theme.Tokens.Glass ? "on" : "off";
+    private string? _favicon;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Ctx.Site.FaviconMediaId is { } id) _favicon = await Content.MediaUrlAsync(id);
+    }
 }

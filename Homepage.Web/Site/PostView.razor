@@ -1,9 +1,10 @@
 <CascadingValue Value="Ctx" IsFixed="true">
-    <SiteDocument Title="@Item.Title" Description="@Item.Excerpt" CanonicalUrl="@Canonical">
+    <SiteDocument Title="@Item.Title" Description="@Item.Excerpt" CanonicalUrl="@Canonical" FeedUrl="@FeedPath">
         <article>
             <div class="post-header container sec-narrow">
                 <h1>@Item.Title</h1>
                 <div class="post-meta">
+                    <a class="post-blog" href="/@Blog.Slug">@Blog.Name</a> ·
                     @Item.PublishedAtUtc?.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)
                     · @ContentExtractor.ReadingMinutes(Item.SearchText) min read
                 </div>
@@ -18,5 +19,7 @@
     [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
     [Parameter, EditorRequired] public ContentItem Item { get; set; } = default!;
     [Parameter, EditorRequired] public BlockTree Tree { get; set; } = default!;
-    private string? Canonical => string.IsNullOrEmpty(Ctx.Site.BaseUrl) ? null : Ctx.Site.BaseUrl.TrimEnd('/') + "/blog/" + Item.Slug;
+    [Parameter, EditorRequired] public Blog Blog { get; set; } = default!;
+    private string FeedPath => "/" + Blog.Slug + "/feed.xml";
+    private string? Canonical => string.IsNullOrEmpty(Ctx.Site.BaseUrl) ? null : $"{Ctx.Site.BaseUrl.TrimEnd('/')}/{Blog.Slug}/{Item.Slug}";
 }

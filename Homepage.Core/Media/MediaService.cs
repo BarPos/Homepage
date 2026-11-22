@@ -23,6 +23,7 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
         ("image/gif", ".gif", "GIF8"u8.ToArray(), 0),
         ("image/webp", ".webp", "WEBP"u8.ToArray(), 8),
         ("image/avif", ".avif", "ftypavif"u8.ToArray(), 4),
+        ("image/x-icon", ".ico", [0x00, 0x00, 0x01, 0x00], 0),
         ("application/pdf", ".pdf", "%PDF-"u8.ToArray(), 0),
     ];
 
@@ -41,6 +42,20 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
         return await db.Media.AsNoTracking().Where(m => visible.Contains(m.GroupId)).OrderByDescending(m => m.CreatedAtUtc).Take(500).ToListAsync(ct);
     }
 
+    /// <summary>Paged, filtered list of the files the user can see.</summary>
+    public async Task<PagedResult<MediaItem>> QueryAsync(EffectivePermissions p, string? search, int? groupId, string? kind, int? page, int? size,
+        CancellationToken ct = default)
+    {
+        var visible = p.GroupsWith(Perm.Ro);
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var q = db.Media.AsNoTracking().Where(m => visible.Contains(m.GroupId));
+        if (groupId is { } g) q = q.Where(m => m.GroupId == g);
+        if (kind == "image") q = q.Where(m => m.ContentType.StartsWith("image/"));
+        else if (kind == "pdf") q = q.Where(m => m.ContentType == "application/pdf");
+        if (!string.IsNullOrWhiteSpace(search)) { var like = Paging.Like(search); q = q.Where(m => EF.Functions.ILike(m.FileName, like)); }
+        return await q.OrderByDescending(m => m.CreatedAtUtc).ThenByDescending(m => m.Id).ToPageAsync(page, size, ct);
+    }
+
     public async Task<MediaItem> UploadAsync(EffectivePermissions p, int groupId, string fileName, Stream content, string actor,
         CancellationToken ct = default)
     {
@@ -48,7 +63,7 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
         Directory.CreateDirectory(paths.Value.MediaDirectory);
         var head = new byte[16];
         var read = await content.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, ct);
-        var sniffed = Sniff(head.AsSpan(0, read)) ?? throw new Blocks.BlockException("Only PNG, JPEG, GIF, WebP, AVIF images and PDF files can be uploaded.");
+        var sniffed = Sniff(head.AsSpan(0, read)) ?? throw new Blocks.BlockException("Only PNG, JPEG, GIF, WebP, AVIF and ICO images and PDF files can be uploaded.");
         var stored = Guid.NewGuid().ToString("N") + sniffed.Ext;
         var path = Path.Combine(paths.Value.MediaDirectory, stored);
         long size = read;

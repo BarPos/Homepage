@@ -43,8 +43,8 @@ nav_order: 7
 
 ## Uploads
 
-- The type is taken from the file's first bytes; only PNG, JPEG, GIF, WebP, AVIF and PDF are accepted (no SVG,
-  no HTML). The name on disk is random; the original name is only shown in the admin.
+- The type is taken from the file's first bytes; only PNG, JPEG, GIF, WebP, AVIF, ICO and PDF are accepted (no
+  SVG, no HTML). The name on disk is random; the original name is only shown in the admin.
 - Media responses send the real type, `nosniff`, and `Content-Security-Policy: default-src 'none'; style-src
   'unsafe-inline'; sandbox`, so even a disguised file cannot run script in the site's origin.
 - 20 MiB per file.

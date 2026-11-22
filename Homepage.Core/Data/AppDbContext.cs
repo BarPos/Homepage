@@ -15,6 +15,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<RoleGroup> RoleGroups => Set<RoleGroup>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<ContentItem> ContentItems => Set<ContentItem>();
+    public DbSet<Blog> Blogs => Set<Blog>();
     public DbSet<Revision> Revisions => Set<Revision>();
     public DbSet<MediaItem> Media => Set<MediaItem>();
     public DbSet<Menu> Menus => Set<Menu>();
@@ -82,7 +83,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.Property(c => c.Excerpt).HasMaxLength(1000);
             e.Property(c => c.Blocks).HasColumnType("jsonb");
             e.Property(c => c.DraftBlocks).HasColumnType("jsonb");
-            e.HasIndex(c => new { c.Type, c.Slug }).IsUnique();
+            // Page addresses are unique among pages; post addresses only within their blog.
+            e.HasIndex(c => c.Slug).IsUnique().HasFilter("\"Type\" = 0").HasDatabaseName("IX_content_items_page_slug");
+            e.HasIndex(c => new { c.BlogId, c.Slug }).IsUnique().HasFilter("\"Type\" = 1").HasDatabaseName("IX_content_items_post_slug");
+            e.HasOne<Blog>().WithMany().HasForeignKey(c => c.BlogId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(c => new { c.Status, c.PublishedAtUtc });
             e.HasIndex(c => c.GroupId);
             e.HasOne<Group>().WithMany().HasForeignKey(c => c.GroupId).OnDelete(DeleteBehavior.Restrict);
@@ -91,6 +95,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.HasGeneratedTsVectorColumn(c => c.SearchVector!, "simple", c => new { c.Title, c.SearchText })
                 .HasIndex(c => c.SearchVector).HasMethod("GIN");
             e.Property(c => c.Version).IsRowVersion();
+        });
+        b.Entity<Blog>(e =>
+        {
+            e.ToTable("blogs");
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.Slug).HasMaxLength(80);
+            e.Property(x => x.Description).HasMaxLength(500);
+            e.HasIndex(x => x.Slug).IsUnique();
         });
         b.Entity<Revision>(e =>
         {

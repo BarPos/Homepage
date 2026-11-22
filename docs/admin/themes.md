@@ -61,7 +61,7 @@ Values outside the ranges are clamped on the server, and colors that are not `#r
 
 ## Glass and backdrop
 
-With **glass** on, the header, glass sections, post cards, quotes, outline buttons and the search field are
+With **glass** on, the glass site bar, glass sections, post cards, quotes, outline buttons and the search field are
 translucent and blur what is behind them, with a thin bright edge and a soft sheen along the top. Glass needs
 something behind it to look like glass, so it works best with a **backdrop**:
 
@@ -78,15 +78,15 @@ With glass off, the same elements become solid cards with a border, and the head
 - `url(…)` is kept only for site paths (`/media/…`) and `data:image/…`; anything else becomes `none`;
 - `<` is removed, so the CSS cannot end the style element.
 
-Classes worth targeting: `.site-header`, `.site-footer`, `.sec`, `.sec-hero`, `.sec-glass`, `.post-card`, `.btn`,
+Classes worth targeting: `.site-bar`, `.site-bar-inner`, `.site-brand`, `.site-logo`, `.site-footer`, `.sec`, `.sec-hero`, `.sec-glass`, `.post-card`, `.btn`,
 `.btn-primary`, `.prose`, `.quote`. Every token is a CSS variable, for example `--color-primary`, `--radius`,
 `--glass-blur`, `--font-heading`.
 
 ## Header and footer
 
 **Header** / **Footer** open the theme's header or footer in the [visual editor](editor.md). The default header is a
-*Site header* block (title, tagline, the `main` menu); the default footer is a section with the `footer` menu and a
-line of text. Changes to the active theme are live immediately.
+*Site bar* with a *Logo / site name* block and the `main` menu; the default footer is a section with the `footer`
+menu and a line of text. Changes to the active theme are live immediately. See [Blocks](blocks.md#site-bar).
 
 ## How it is served
 

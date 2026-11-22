@@ -1,16 +1,36 @@
 <AdminShell Title="Audit log" Section="audit">
+    <ListFilters Url="Url" Placeholder="Search who, what, details, address…">
+        <select name="area" aria-label="Area">
+            <option value="">Everything</option>
+            @foreach (var (key, label) in Areas) { <option value="@key" selected="@(key == Url["area"])">@label</option> }
+        </select>
+        <input type="date" name="from" value="@Url["from"]" aria-label="From" style="max-width:160px" />
+        <input type="date" name="to" value="@Url["to"]" aria-label="To" style="max-width:160px" />
+    </ListFilters>
+    <div id="list">
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Object</th><th>Details</th></tr></thead>
+            <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Object</th><th>Details</th><th>Address</th></tr></thead>
             <tbody>
-                @foreach (var a in Entries)
+                @foreach (var a in Result.Items)
                 {
-                    <tr><td class="nowrap muted">@a.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td><td>@a.Actor</td><td><code>@a.Action</code></td><td>@a.Entity @a.EntityId</td><td>@a.Details</td></tr>
+                    <tr><td class="nowrap muted">@a.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td><td>@a.Actor</td><td><code>@a.Action</code></td><td>@a.Entity @a.EntityId</td><td>@a.Details</td><td class="muted small">@a.Ip</td></tr>
                 }
+                @if (Result.Total == 0) { <tr><td colspan="6" class="muted">No entries match.</td></tr> }
             </tbody>
         </table>
     </div>
+    <Pager Url="Url" Page="Result.Page" TotalPages="Result.TotalPages" Total="Result.Total" From="Result.From" To="Result.To" />
+    </div>
 </AdminShell>
 @code {
-    [Parameter] public List<AuditEntry> Entries { get; set; } = [];
+    [Parameter, EditorRequired] public PagedResult<AuditEntry> Result { get; set; } = default!;
+    [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
+
+    public static readonly (string Key, string Label)[] Areas =
+    [
+        ("signin", "Sign-ins"), ("content", "Pages and posts"), ("media", "Media"), ("theme", "Themes"), ("menu", "Menus"),
+        ("blog", "Blogs"), ("user", "Users"), ("group", "Groups"), ("role", "Roles"), ("grant", "Grants"), ("revoke", "Revocations"),
+        ("settings", "Settings"), ("update", "Updates"),
+    ];
 }

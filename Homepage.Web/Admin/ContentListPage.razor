@@ -1,25 +1,47 @@
 <AdminShell Title="@(Type == ContentType.Post ? "Posts" : "Pages")" Section="@(Type == ContentType.Post ? "posts" : "pages")">
     @if (CreateGroups.Count > 0)
     {
-        <div class="card"><NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Type="Type" /></div>
+        <div class="card"><NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Type="Type" Blogs="Blogs" /></div>
     }
-    <form class="toolbar" hx-get="/admin/content" hx-target="#content-table" hx-select="#content-table" hx-swap="outerHTML"
-          hx-trigger="input changed delay:300ms from:input, change from:select" hx-push-url="true">
+    <ListFilters Url="Url" Placeholder="Search titles and addresses…">
         <input type="hidden" name="type" value="@Type" />
-        <input type="search" name="q" value="@Search" placeholder="Search titles…" style="max-width:280px" />
-        <select name="groupId" style="max-width:200px">
+        <select name="group" aria-label="Group">
             <option value="">All groups I can see</option>
-            @foreach (var (id, name) in Groups) { <option value="@id" selected="@(id == GroupId)">@name</option> }
+            @foreach (var (id, name) in Groups) { <option value="@id" selected="@(id.ToString() == Url["group"])">@name</option> }
         </select>
-    </form>
-    <ContentTable Items="Items" Groups="Groups" />
+        @if (Type == ContentType.Post && Blogs.Count > 1)
+        {
+            <select name="blog" aria-label="Blog">
+                <option value="">All blogs</option>
+                @foreach (var b in Blogs) { <option value="@b.Id" selected="@(b.Id.ToString() == Url["blog"])">@b.Name</option> }
+            </select>
+        }
+        <select name="status" aria-label="Status">
+            <option value="">Any status</option>
+            <option value="draft" selected="@(Url["status"] == "draft")">Drafts</option>
+            <option value="published" selected="@(Url["status"] == "published")">Published</option>
+            <option value="changed" selected="@(Url["status"] == "changed")">Published, with changes</option>
+        </select>
+        <select name="sort" aria-label="Sort">
+            <option value="">Recently changed</option>
+            <option value="title" selected="@(Url["sort"] == "title")">Title</option>
+            <option value="published" selected="@(Url["sort"] == "published")">Recently published</option>
+        </select>
+    </ListFilters>
+    <div id="list">
+        <ContentTable Items="Result.Items" Groups="Groups" BlogSlugs="BlogSlugs" BlogNames="BlogNames" HomePageId="HomePageId" />
+        <Pager Url="Url" Page="Result.Page" TotalPages="Result.TotalPages" Total="Result.Total" From="Result.From" To="Result.To" />
+    </div>
 </AdminShell>
 @code {
     [Parameter] public ContentType Type { get; set; }
-    [Parameter] public List<ContentItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public PagedResult<ContentItem> Result { get; set; } = default!;
+    [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
     [Parameter] public Dictionary<int, string> Groups { get; set; } = [];
     [Parameter] public List<Group> CreateGroups { get; set; } = [];
+    [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
     [Parameter] public int? DefaultGroupId { get; set; }
-    [Parameter] public int? GroupId { get; set; }
-    [Parameter] public string? Search { get; set; }
+    [Parameter] public int? HomePageId { get; set; }
+    private Dictionary<int, string> BlogSlugs => Blogs.ToDictionary(b => b.Id, b => b.Slug);
+    private Dictionary<int, string> BlogNames => Blogs.ToDictionary(b => b.Id, b => b.Name);
 }

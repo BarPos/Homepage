@@ -80,8 +80,10 @@ These are changed in the admin and kept in the `settings` table, so they survive
 |---|---|---|
 | **Settings** | Site title, tagline | Shown in the header and in page titles |
 | | Public address | `https://www.example.com`: used in RSS, the sitemap and canonical links. Empty = the address of the request. |
-| | Home page | A published page, or the list of latest posts |
+| | Home page | What `/` shows: a published page, or a blog's list of posts |
+| | Logo, favicon | Images from Media. The logo is shown by the *Logo / site name* block and falls back to the title. |
 | | Default group for new content | Preselected when someone creates a page or post |
 | **Themes** | Active theme, design tokens, custom CSS, header and footer | See [Themes](../admin/themes.md) |
-| **Menus** | Links of the `main` and `footer` menus | See [Media and menus](../admin/media-menus.md) |
+| **Menus** | Menus and their links | See [Media and menus](../admin/media-menus.md) |
+| **Blogs** | Blogs, their addresses, descriptions and page sizes | See [Blogs](../admin/blogs.md) |
 | **Users & permissions** | Accounts, groups, roles and grants | See [Permissions](../permissions.md) |

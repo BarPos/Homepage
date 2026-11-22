@@ -57,7 +57,7 @@ never used for content.
 |---|---|---|
 | `admin` | — | Users, groups, roles, permissions, settings, updates. Full access everywhere. |
 | `themes` | See themes and previews | Activate, duplicate and edit themes; custom CSS |
-| `layout` | See themes and previews | Header, footer and menus |
+| `layout` | See themes and previews | Header, footer, menus and blogs |
 | `html` | — | Use the raw HTML block |
 | `forms` | — | Reserved for form submissions (not built yet) |
 | `audit` | Read the audit log | — |

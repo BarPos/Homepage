@@ -32,14 +32,26 @@ Two-factor sign-in is not available yet.
 | Page | |
 |---|---|
 | **Dashboard** | Counts of pages, posts and drafts you can see, the active theme, a form to create a page or post, recently changed items |
-| **Pages**, **Posts** | Lists with search and a group filter. *changes* marks a published item whose draft differs. **Edit** opens the [visual editor](editor.md), **Settings** the item's settings. |
-| Item settings | Title, address (slug), excerpt, group; publish, unpublish, delete; published revisions |
-| **Media** | Upload images and PDFs, see and delete files (see [Media and menus](media-menus.md)) |
+| **Pages**, **Posts** | Lists with search, filters (group, blog, status), sorting and paging. *changes* marks a published item whose draft differs; *home* marks the home page. **Edit** opens the [visual editor](editor.md), **Settings** the item's settings. |
+| Item settings | Title, address (slug), excerpt, blog (posts), group; publish, unpublish, delete; *Use as home page* (pages); published revisions |
+| **Media** | Upload images and PDFs, search, filter and delete files (see [Media and menus](media-menus.md)) |
 | **Themes** | Activate, duplicate, edit design, header and footer (see [Themes](themes.md)) |
-| **Menus** | The `main` and `footer` menus (needs `layout: rw`) |
+| **Menus** | Create, rename and delete menus and edit their links (needs `layout: rw`) |
+| **Blogs** | Create blogs, change their addresses (see [Blogs](blogs.md), needs `layout: rw`) |
 | **Users & permissions** | Users, Groups, Roles, and the three relation screens (needs `admin: rw`, see [Permissions](../permissions.md)) |
-| **Settings** | Site title, tagline, public address, home page, default group; version and updates (needs `admin: rw`) |
+| **Settings** | Site title, tagline, logo, favicon, public address, home page, default group; version and updates (needs `admin: rw`) |
 | **Audit log** | Who signed in, created, published, deleted, changed themes, menus, settings and permissions (needs `audit: ro`) |
+
+## Lists
+
+Every list in the admin (pages, posts, media, users, groups, roles, audit log) has the same controls:
+- a **search** box that filters as you type;
+- **filters** for the list (group, blog, status, kind, role, area, dates);
+- **rows per page** (10, 25, 50, 100) and page links;
+- **Clear filters**.
+
+Filtering, counting and paging happen in the database, and only over items you may see. The filters are part of the
+URL, so a view can be bookmarked or shared. The relation screens under **Users & permissions** are not paged yet.
 
 ## Creating content
 
@@ -47,11 +59,20 @@ On the **Dashboard** or the **Pages** / **Posts** list: title, type (*Page* or *
 edit**. The group list offers only groups where you have `create`.
 
 - A **page** starts with a section holding its title as a heading. Pages live at `/<slug>`.
-- A **post** starts with one empty Markdown block. Posts live at `/blog/<slug>` and appear in the blog, the RSS feed
-  and *Latest posts* blocks.
-- The address is made from the title (`About us` → `/about-us`) and can be changed in the item's settings. A few
-  addresses belong to the site itself and are never given to a page: `admin`, `blog`, `search`, `media`, `theme`,
-  `healthz`, `feed-xml`, `sitemap-xml`, `robots-txt`.
+- A **post** starts with one empty Markdown block and belongs to a **blog**, chosen when you create it (the form
+  shows a blog list for posts). Posts live at `/<blog>/<slug>`, for example `/blog/hello-world` or
+  `/releases/version-2`, and appear in that blog, its RSS feed and *Latest posts* blocks.
+- The address is made from the title (`About us` → `/about-us`) and can be changed in the item's settings.
+  - **Pages and blogs share the first part of the address**: a page cannot take a blog's address and the other way
+    round. A page titled like a blog gets a number (`/releases-2`).
+  - A few addresses belong to the site itself: `admin`, `search`, `media`, `theme`, `healthz`, `content`,
+    `feed-xml`, `sitemap-xml`, `robots-txt`.
+  - A post's address only has to be unique within its blog.
+
+## The home page
+
+`/` shows either a **published page** or a **blog's list of posts**. Choose it in **Settings → Home page**, or with
+**Use as home page** in a page's settings (admins only). The page lists mark the home page with *home*.
 
 ## Drafts, publishing and revisions
 

@@ -63,10 +63,19 @@ else
                 </select>
                 <div class="help"><a href="/admin/media" target="_blank">Upload images</a> in Media, then reselect the block.</div>
             }
+            else if (p.GetCustomAttribute<BlogPickerAttribute>() is not null)
+            {
+                <label for="@id">@label</label>
+                <select id="@id" name="@name">
+                    <option value="0">All blogs</option>
+                    @foreach (var b in Blogs) { <option value="@b.Id" selected="@(Equals(b.Id, value))">@b.Name</option> }
+                </select>
+            }
             else if (p.GetCustomAttribute<MenuPickerAttribute>() is not null)
             {
                 <label for="@id">@label</label>
                 <select id="@id" name="@name">
+                    <option value="">(no menu)</option>
                     @foreach (var m in Menus) { <option value="@m.Key" selected="@(m.Key == (string?)value)">@m.Name</option> }
                 </select>
             }
@@ -97,6 +106,7 @@ else
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public List<MediaItem> Media { get; set; } = [];
     [Parameter] public List<Menu> Menus { get; set; } = [];
+    [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
 
     private static string Humanize(string s) =>
         System.Text.RegularExpressions.Regex.Replace(s, "(?<=[a-z])(?=[A-Z])", " ");

@@ -5,11 +5,19 @@
         @if (IsRoles) { <text>Roles bundle group permissions. Give a role permissions under Roles ↔ Groups, and assign it to users under Users ↔ Roles.</text> }
         else { <text>Every page, post and media file belongs to a group. System groups gate admin areas and cannot be renamed.</text> }
     </p>
+    <ListFilters Url="Url" Placeholder="@SearchHint">
+        <select name="status" aria-label="Status">
+            <option value="">Valid and invalid</option>
+            <option value="valid" selected="@(Url["status"] == "valid")">Valid</option>
+            <option value="invalid" selected="@(Url["status"] == "invalid")">Invalid</option>
+        </select>
+    </ListFilters>
+    <div id="list">
     <div class="table-wrap">
         <table>
             <thead><tr><th>Name</th><th>Comment</th><th>Valid</th><th></th></tr></thead>
             <tbody>
-                @foreach (var r in Rows)
+                @foreach (var r in Result.Items)
                 {
                     <tr>
                         <td colspan="4" style="padding:0">
@@ -39,11 +47,15 @@
             </tbody>
         </table>
     </div>
+    <Pager Url="Url" Page="Result.Page" TotalPages="Result.TotalPages" Total="Result.Total" From="Result.From" To="Result.To" />
+    </div>
 </AdminShell>
 @code {
     public sealed record Row(int Id, string Name, string Comment, bool Valid, bool IsSystem);
-    [Parameter] public List<Row> Rows { get; set; } = [];
+    [Parameter, EditorRequired] public PagedResult<Row> Result { get; set; } = default!;
+    [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
     [Parameter] public bool IsRoles { get; set; }
+    private string SearchHint => IsRoles ? "Search roles…" : "Search groups…";
     [Parameter] public string? Error { get; set; }
     [CascadingParameter] public HttpContext? HttpContext { get; set; }
     private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";

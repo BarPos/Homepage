@@ -29,7 +29,18 @@ public static class BuiltInThemes
 
     public static BlockTree DefaultHeader() => new()
     {
-        Blocks = [new BlockNode { Type = "siteheader", Props = BlockOps.ToJson(new SiteHeaderProps { ShowTagline = true }) }],
+        Blocks =
+        [
+            new BlockNode
+            {
+                Type = "sitebar", Props = BlockOps.ToJson(new SiteBarProps()),
+                Children =
+                [
+                    new BlockNode { Type = "sitebrand", Props = BlockOps.ToJson(new SiteBrandProps()) },
+                    new BlockNode { Type = "menu", Props = BlockOps.ToJson(new MenuProps { MenuKey = "main", Align = Align.Right }) },
+                ],
+            },
+        ],
     };
 
     public static BlockTree DefaultFooter() => new()

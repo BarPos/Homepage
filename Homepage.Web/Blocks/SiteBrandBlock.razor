@@ -1,0 +1,31 @@
+@* Logo and/or site name. Falls back to text when no logo is set, or when the logo file was deleted. *@
+@inject PublicContent Content
+@{
+    var p = Node.PropsAs<SiteBrandProps>();
+    var text = string.IsNullOrWhiteSpace(p.Text) ? Ctx.Site.Title : p.Text;
+    var showLogo = _logo is not null && p.Display != BrandDisplay.TextOnly;
+    var showText = !showLogo || p.Display == BrandDisplay.LogoAndText;
+}
+<a class="site-brand" href="/">
+    @if (showLogo)
+    {
+        <img class="site-logo" src="@_logo" alt="@(showText ? "" : text)" style="height:@(Math.Clamp(p.LogoHeight, 16, 120))px" />
+    }
+    @if (showText)
+    {
+        <span class="site-brand-text">
+            <strong>@text</strong>
+            @if (p.ShowTagline && !string.IsNullOrWhiteSpace(Ctx.Site.Tagline)) { <span>@Ctx.Site.Tagline</span> }
+        </span>
+    }
+</a>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+    private string? _logo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Ctx.Site.LogoMediaId is { } id) _logo = await Content.MediaUrlAsync(id);
+    }
+}

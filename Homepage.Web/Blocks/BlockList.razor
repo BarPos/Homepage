@@ -41,5 +41,5 @@ else
     [Parameter] public bool Contain { get; set; }
     [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
 
-    private bool NeedsContainer(BlockNode node) => Contain && ParentId is null && node.Type is not ("section" or "siteheader");
+    private bool NeedsContainer(BlockNode node) => Contain && ParentId is null && node.Type is not ("section" or "sitebar");
 }

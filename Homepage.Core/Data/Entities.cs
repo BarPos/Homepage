@@ -54,6 +54,20 @@ public sealed class UserRole
 }
 
 public enum ContentType { Page = 0, Post = 1 }
+
+/// <summary>A blog: a list of posts at its own address (/blog, /releases, …), with its own RSS feed.</summary>
+public sealed class Blog
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>The first URL segment: /{Slug} lists the posts, /{Slug}/{post} shows one.</summary>
+    public string Slug { get; set; } = "";
+    public string Description { get; set; } = "";
+    public int PostsPerPage { get; set; } = 10;
+    /// <summary>Earlier addresses; requests to them are redirected (301) to the current one.</summary>
+    public List<string> PreviousSlugs { get; set; } = [];
+    public DateTime CreatedAtUtc { get; set; }
+}
 public enum ContentStatus { Draft = 0, Published = 1 }
 
 /// <summary>A page or a blog post. Content is a block tree (JSON, see Homepage.Blocks).</summary>
@@ -63,6 +77,8 @@ public sealed class ContentItem
     public ContentType Type { get; set; }
     public int GroupId { get; set; }
     public int? ParentId { get; set; }
+    /// <summary>Posts only: the blog the post belongs to.</summary>
+    public int? BlogId { get; set; }
     public string Slug { get; set; } = "";
     public string Title { get; set; } = "";
     public string Excerpt { get; set; } = "";

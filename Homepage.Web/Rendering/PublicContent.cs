@@ -1,28 +1,51 @@
+using Homepage.Content;
 using Homepage.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Homepage.Web.Rendering;
 
+/// <summary>A published page or post in a list, with its public URL.</summary>
+public sealed record PostSummary(int Id, ContentType Type, string Title, string Slug, string Excerpt, DateTime? PublishedAtUtc,
+    DateTime UpdatedAtUtc, int? BlogId, string Url);
+
 /// <summary>Read-only queries for the public site: published items only.</summary>
-public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMemoryCache cache)
+public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMemoryCache cache, BlogService blogs)
 {
-    public async Task<List<ContentItem>> LatestPostsAsync(int count, int skip = 0, CancellationToken ct = default)
+    /// <summary>/{slug} for pages, /{blog}/{slug} for posts.</summary>
+    public static string Url(ContentType type, string slug, int? blogId, IReadOnlyDictionary<int, string> blogSlugs) =>
+        type == ContentType.Page ? "/" + slug
+        : "/" + (blogId is { } b && blogSlugs.TryGetValue(b, out var bs) ? bs : "blog") + "/" + slug;
+
+    private async Task<List<PostSummary>> ToSummariesAsync(IQueryable<ContentItem> q, CancellationToken ct)
     {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.ContentItems.AsNoTracking()
-            .Where(c => c.Type == ContentType.Post && c.Status == ContentStatus.Published)
-            .OrderByDescending(c => c.PublishedAtUtc).ThenByDescending(c => c.Id)
-            .Skip(skip).Take(count)
-            .Select(c => new ContentItem { Id = c.Id, Slug = c.Slug, Title = c.Title, Excerpt = c.Excerpt, PublishedAtUtc = c.PublishedAtUtc, UpdatedAtUtc = c.UpdatedAtUtc })
-            .ToListAsync(ct);
+        var slugs = await blogs.SlugsAsync(ct);
+        var rows = await q.Select(c => new { c.Id, c.Type, c.Title, c.Slug, c.Excerpt, c.PublishedAtUtc, c.UpdatedAtUtc, c.BlogId }).ToListAsync(ct);
+        return rows.Select(c => new PostSummary(c.Id, c.Type, c.Title, c.Slug, c.Excerpt, c.PublishedAtUtc, c.UpdatedAtUtc, c.BlogId,
+            Url(c.Type, c.Slug, c.BlogId, slugs))).ToList();
     }
 
-    public async Task<ContentItem?> GetPublishedAsync(ContentType type, string slug, CancellationToken ct = default)
+    /// <summary>Latest published posts of one blog, or of all blogs when <paramref name="blogId"/> is null.</summary>
+    public async Task<List<PostSummary>> LatestPostsAsync(int count, int skip = 0, int? blogId = null, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var q = db.ContentItems.AsNoTracking().Where(c => c.Type == ContentType.Post && c.Status == ContentStatus.Published);
+        if (blogId is { } b) q = q.Where(c => c.BlogId == b);
+        return await ToSummariesAsync(q.OrderByDescending(c => c.PublishedAtUtc).ThenByDescending(c => c.Id).Skip(skip).Take(count), ct);
+    }
+
+    public async Task<ContentItem?> GetPublishedPageAsync(string slug, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.ContentItems.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Type == type && c.Slug == slug && c.Status == ContentStatus.Published, ct);
+            .FirstOrDefaultAsync(c => c.Type == ContentType.Page && c.Slug == slug && c.Status == ContentStatus.Published, ct);
+    }
+
+    public async Task<ContentItem?> GetPublishedPostAsync(int blogId, string slug, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.ContentItems.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Type == ContentType.Post && c.BlogId == blogId && c.Slug == slug && c.Status == ContentStatus.Published, ct);
     }
 
     public async Task<ContentItem?> GetPublishedByIdAsync(int id, CancellationToken ct = default)
@@ -31,24 +54,20 @@ public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMe
         return await db.ContentItems.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id && c.Status == ContentStatus.Published, ct);
     }
 
-    public async Task<List<ContentItem>> SearchAsync(string query, int take = 20, CancellationToken ct = default)
+    public async Task<List<PostSummary>> SearchAsync(string query, int take = 20, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.ContentItems.AsNoTracking()
+        return await ToSummariesAsync(db.ContentItems.AsNoTracking()
             .Where(c => c.Status == ContentStatus.Published && c.SearchVector!.Matches(EF.Functions.WebSearchToTsQuery("simple", query)))
             .OrderByDescending(c => c.SearchVector!.Rank(EF.Functions.WebSearchToTsQuery("simple", query)))
-            .Take(take)
-            .Select(c => new ContentItem { Id = c.Id, Type = c.Type, Slug = c.Slug, Title = c.Title, Excerpt = c.Excerpt, PublishedAtUtc = c.PublishedAtUtc })
-            .ToListAsync(ct);
+            .Take(take), ct);
     }
 
-    public async Task<List<ContentItem>> AllPublishedAsync(CancellationToken ct = default)
+    public async Task<List<PostSummary>> AllPublishedAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.ContentItems.AsNoTracking().Where(c => c.Status == ContentStatus.Published)
-            .OrderByDescending(c => c.PublishedAtUtc)
-            .Select(c => new ContentItem { Id = c.Id, Type = c.Type, Slug = c.Slug, Title = c.Title, Excerpt = c.Excerpt, PublishedAtUtc = c.PublishedAtUtc, UpdatedAtUtc = c.UpdatedAtUtc })
-            .ToListAsync(ct);
+        return await ToSummariesAsync(db.ContentItems.AsNoTracking().Where(c => c.Status == ContentStatus.Published)
+            .OrderByDescending(c => c.PublishedAtUtc), ct);
     }
 
     /// <summary>/media/{stored name}, or null when the item is gone.</summary>
@@ -62,4 +81,6 @@ public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMe
         cache.Set(key, url, TimeSpan.FromMinutes(10));
         return url;
     }
+
+    public void ForgetMedia(int id) => cache.Remove("media:url:" + id);
 }

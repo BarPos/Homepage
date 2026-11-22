@@ -37,13 +37,19 @@ until you publish again.
 
 ## Adding blocks
 
-- **Click** a block in the palette: it goes **inside** the selected block if that is a container (section, column),
-  otherwise **after** it. With nothing selected it goes at the end.
-- **Drag** a block from the palette into the **Layers** tree, to exactly the place you want.
+- **Drag** a block from the palette **onto the page**. A blue line shows where it will go; an empty container gets a
+  dashed outline. Releasing over a container's empty space puts the block inside it.
+- **Drag** a block from the palette into the **Layers** tree. Releasing on a container's row puts it inside that
+  container, at the end; elsewhere it goes above or below the row.
+- **Click** a block in the palette (or focus it and press Enter): it goes **inside** the selected block if that is a
+  container (section, column, site bar), otherwise **after** it. With nothing selected it goes at the end.
+
+While you drag, the editor follows the [nesting rules](blocks.md#nesting-rules): a block dropped where it is not
+allowed (for example a section inside a section) goes right after the container instead.
 - **Columns** come with two columns; duplicate a column for a third.
 
-The palette shows only blocks you may use: the **HTML** block needs `html: rw`, and **Site header** exists only in a
-theme's header.
+The palette shows only blocks you may use: the **HTML** block needs `html: rw`, and **Site bar** and **Logo / site
+name** exist only in a theme's header and footer.
 
 ## Moving blocks
 
@@ -76,3 +82,7 @@ version.
 A theme's header and footer are block trees too. **Themes → Header** / **Footer** opens them in the same editor
 (needs `layout: rw`). Built-in themes are read-only: duplicate one first. Changes to the active theme's header or
 footer are live at once, there is no separate publish step.
+
+The default header is a **Site bar** holding a **Logo / site name** block and a **Menu**. Select the bar to change
+its style (glass, solid, transparent), how its items are arranged, and whether it stays on top while scrolling.
+Drag buttons, other menus or text into it, reorder them, or remove what you don't need.

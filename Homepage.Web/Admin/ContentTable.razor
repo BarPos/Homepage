@@ -1,13 +1,16 @@
-<div class="table-wrap" id="content-table">
+<div class="table-wrap">
     <table>
         <thead><tr><th>Title</th><th>Type</th><th>Group</th><th>Status</th><th>Updated</th><th></th></tr></thead>
         <tbody>
             @foreach (var c in Items)
             {
+                var url = PublicContent.Url(c.Type, c.Slug, c.BlogId, BlogSlugs);
                 <tr>
-                    <td><a href="/admin/editor/content-@c.Id"><strong>@c.Title</strong></a><div class="muted small">@((c.Type == ContentType.Post ? "/blog/" : "/") + c.Slug)</div></td>
-                    <td>@(c.Type == ContentType.Post ? "Post" : "Page")</td>
-                    <td><span class="badge">@GroupNames.GetValueOrDefault(c.GroupId, "?")</span></td>
+                    <td><a href="/admin/editor/content-@c.Id"><strong>@c.Title</strong></a>
+                        @if (c.Id == HomePageId) { <span class="badge badge-ok" title="Shown at /">home</span> }
+                        <div class="muted small">@url</div></td>
+                    <td>@(c.Type == ContentType.Post ? "Post" : "Page")@if (c.BlogId is { } b && BlogNames.TryGetValue(b, out var bn)) { <div class="muted small">@bn</div> }</td>
+                    <td><span class="badge">@Groups.GetValueOrDefault(c.GroupId, "?")</span></td>
                     <td>
                         @if (c.Status == ContentStatus.Published) { <span class="badge badge-ok">Published</span> }
                         else { <span class="badge">Draft</span> }
@@ -20,12 +23,14 @@
                     </td>
                 </tr>
             }
-            @if (Items.Count == 0) { <tr><td colspan="6" class="muted">Nothing here yet.</td></tr> }
+            @if (Items.Count == 0) { <tr><td colspan="6" class="muted">Nothing here.</td></tr> }
         </tbody>
     </table>
 </div>
 @code {
-    [Parameter] public List<ContentItem> Items { get; set; } = [];
+    [Parameter] public IReadOnlyList<ContentItem> Items { get; set; } = [];
     [Parameter] public Dictionary<int, string> Groups { get; set; } = [];
-    private Dictionary<int, string> GroupNames => Groups;
+    [Parameter] public IReadOnlyDictionary<int, string> BlogSlugs { get; set; } = new Dictionary<int, string>();
+    [Parameter] public IReadOnlyDictionary<int, string> BlogNames { get; set; } = new Dictionary<int, string>();
+    [Parameter] public int? HomePageId { get; set; }
 }

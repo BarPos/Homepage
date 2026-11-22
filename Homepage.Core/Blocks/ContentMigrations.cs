@@ -19,7 +19,7 @@ public sealed class ContentMigrator(IEnumerable<IContentMigration> migrations, i
 {
     private readonly Dictionary<int, IContentMigration> _steps = migrations.ToDictionary(m => m.FromVersion);
 
-    public static ContentMigrator Default { get; } = new([]);
+    public static ContentMigrator Default { get; } = new([new V1SiteHeaderToSiteBar()]);
 
     /// <summary>Returns the migrated JSON, or null when it is already current.</summary>
     public string? MigrateJson(string? json)
@@ -39,5 +39,54 @@ public sealed class ContentMigrator(IEnumerable<IContentMigration> migrations, i
             doc["schemaVersion"] = version;
         }
         return doc.ToJsonString();
+    }
+}
+
+/// <summary>
+/// Schema 1 → 2: the fixed "siteheader" block becomes an editable "sitebar" holding a "sitebrand" and a "menu",
+/// wherever it is in the tree (top level or inside a section).
+/// </summary>
+public sealed class V1SiteHeaderToSiteBar : IContentMigration
+{
+    public int FromVersion => 1;
+
+    public void Migrate(JsonObject document)
+    {
+        if (document["blocks"] is JsonArray blocks) Walk(blocks);
+    }
+
+    private static void Walk(JsonArray list)
+    {
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (list[i] is not JsonObject node) continue;
+            if (node["type"]?.GetValue<string>() == "siteheader")
+            {
+                var props = node["props"] as JsonObject;
+                var menuKey = props?["menuKey"]?.GetValue<string>() ?? "main";
+                var showTagline = props?["showTagline"]?.GetValue<bool>() ?? false;
+                list[i] = new JsonObject
+                {
+                    ["id"] = node["id"]?.GetValue<string>() ?? BlockTree.NewId(),
+                    ["type"] = "sitebar",
+                    ["props"] = new JsonObject { ["sticky"] = true, ["style"] = (int)BarStyle.Glass, ["justify"] = (int)BarJustify.Spread },
+                    ["children"] = new JsonArray(
+                        new JsonObject
+                        {
+                            ["id"] = BlockTree.NewId(), ["type"] = "sitebrand",
+                            ["props"] = new JsonObject { ["display"] = (int)BrandDisplay.LogoAndText, ["text"] = "", ["showTagline"] = showTagline, ["logoHeight"] = 32 },
+                            ["children"] = new JsonArray(),
+                        },
+                        new JsonObject
+                        {
+                            ["id"] = BlockTree.NewId(), ["type"] = "menu",
+                            ["props"] = new JsonObject { ["menuKey"] = menuKey, ["align"] = (int)Align.Right },
+                            ["children"] = new JsonArray(),
+                        }),
+                };
+                continue;
+            }
+            if (node["children"] is JsonArray children) Walk(children);
+        }
     }
 }

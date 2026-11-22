@@ -10,13 +10,14 @@ nav_order: 2
 
 | URL | | Cached |
 |---|---|---|
-| `/` | The home page chosen in **Settings**, or the latest posts | yes |
-| `/<slug>` | A published page | yes |
-| `/blog` | Published posts, 10 per page; `?skip=N` for more (htmx *Load more*) | yes |
-| `/blog/<slug>` | A published post | yes |
+| `/` | The home page chosen in **Settings**: a page, or a blog's posts | yes |
+| `/<slug>` | A published page, or a blog's posts (the blog's page size; `?skip=N` for more, htmx *Load more*) | yes |
+| `/<blog>/<slug>` | A published post of that blog | yes |
+| `/<blog>/feed.xml` | RSS 2.0 of the blog's 20 latest posts | yes |
+| `/<old blog address>…` | `301` to the blog's current address (after a rename) | yes |
 | `/search?q=…` | Full-text search over published pages and posts (live search with htmx) | yes, per query |
-| `/feed.xml` | RSS 2.0 of the 20 latest posts | yes |
-| `/sitemap.xml` | Every published page and post | yes |
+| `/feed.xml` | RSS 2.0 of the 20 latest posts of all blogs | yes |
+| `/sitemap.xml` | Every blog, published page and post | yes |
 | `/robots.txt` | Disallows `/admin/`, points at the sitemap | yes |
 | `/media/<file>` | An uploaded file, one-year immutable cache | browser |
 | `/theme/<id>/<version>.css` | The CSS variables of a theme version, one-year immutable cache | browser |
@@ -35,18 +36,19 @@ All under `/admin`, signed in (except `login`), never cached. POST requests need
 |---|---|
 | `/admin/login`, `/admin/logout` | Sign in and out |
 | `/admin` | Dashboard |
-| `/admin/content?type=page\|post&groupId=&q=` | Lists |
+| `/admin/content?type=page\|post&q=&group=&blog=&status=&sort=&size=&page=` | Lists (`status`: `draft`, `published`, `changed`; `sort`: `title`, `published`) |
 | `/admin/content/new` (POST) | Create |
-| `/admin/content/<id>` | Item settings; `/publish`, `/unpublish`, `/delete` (POST) |
+| `/admin/content/<id>` | Item settings; `/publish`, `/unpublish`, `/delete`, `/home` (POST) |
 | `/admin/editor/<target>` | Visual editor. `<target>` is `content-<id>`, `header-<themeId>` or `footer-<themeId>`. |
 | `/admin/editor/<target>/canvas`, `/tree`, `/layers`, `/inspector/<blockId>` | Editor parts (HTML) |
 | `/admin/editor/<target>/ops` (POST, JSON) | `{"op":"insert\|move\|delete\|duplicate","id":…,"type":…,"parentId":…,"index":…}` |
 | `/admin/editor/<target>/props/<blockId>` (POST, form) | Inspector values, `p.<Property>` |
-| `/admin/media` | Media; upload (POST, multipart), `/<id>/delete` |
+| `/admin/media?q=&group=&kind=&size=&page=` | Media; upload (POST, multipart), `/<id>/delete` |
 | `/admin/themes`, `/admin/themes/<id>` | Themes, design editor; `/preview`, `/activate`, `/duplicate` |
-| `/admin/menus`, `/admin/menus/<key>` | Menus |
-| `/admin/users`, `/admin/users/<id>`, `/password` | Users |
-| `/admin/groups`, `/admin/roles` | Groups and roles |
+| `/admin/menus`, `/admin/menus/<key>`, `/<key>/delete` | Menus: create (POST `/admin/menus`), save, delete |
+| `/admin/blogs`, `/admin/blogs/<id>/delete` | Blogs: create or save (POST `/admin/blogs`), delete |
+| `/admin/users?q=&status=&role=`, `/admin/users/<id>`, `/password` | Users |
+| `/admin/groups?q=&status=`, `/admin/roles?q=&status=` | Groups and roles |
 | `/admin/permissions/user-groups`, `/role-groups`, `/user-roles` | The relation screens |
 | `/admin/settings`, `/admin/updates/check`, `/admin/updates/apply` | Settings and updates |
-| `/admin/audit` | Audit log |
+| `/admin/audit?q=&area=&from=&to=` | Audit log |

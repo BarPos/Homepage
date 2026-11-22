@@ -47,7 +47,8 @@ Logs of these commands go to stderr; stdout carries only their own output.
 ## Caching
 
 - **Public pages** are kept in memory for up to 30 minutes and served without database queries. Publishing,
-  unpublishing or deleting content, and changing the theme, menus or settings, empties the cache at once.
+  unpublishing or deleting content, deleting media, and changing the theme, menus, blogs or settings, empties the
+  cache at once.
 - **Theme CSS** (`/theme/<id>/<version>.css`) and **media** (`/media/<file>`) are sent with a one-year immutable
   cache header. A changed theme gets a new URL; a media file never changes.
 - **The admin** is never cached (`Cache-Control: no-store`).

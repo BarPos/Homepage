@@ -24,7 +24,7 @@ A full-width band with the page container inside. Top level only.
 | Background | *Page background* (transparent over the theme's backdrop), *Surface* (translucent), *Alternate surface*, *Primary*, *Accent* | Page background |
 | Padding | None, Sm, Md, Lg, Xl | Lg |
 
-Contains any content block, *Columns* and *Site header*.
+Contains any content block, *Columns*, and in a theme's header or footer the *Site bar* and *Logo / site name*.
 
 ### Columns
 Side-by-side columns that stack on screens narrower than 760 px.
@@ -97,6 +97,7 @@ The newest published posts, read when the page is rendered.
 
 | Setting | Values | Default |
 |---|---|---|
+| Blog | *All blogs*, or one blog | All blogs |
 | Number of posts | 1 to 50 | 5 |
 | Layout | *List*, *Grid* | List |
 | Show excerpts | yes / no | yes |
@@ -104,20 +105,44 @@ The newest published posts, read when the page is rendered.
 ## Site
 
 ### Menu
-A menu from **Menus** (`main` or `footer`), aligned left, center or right.
+A menu from **Menus**, aligned left, center or right. If its menu is deleted, the block shows nothing until you pick
+another one.
 
-### Site header
-The site title, the tagline (optional) and a menu, on a floating glass bar. Only in a theme's **header**.
+### Site bar
+The bar at the top (or bottom) of the site: a row holding the brand, menus, buttons, spacers or text. Only in a
+theme's header or footer.
+
+| Setting | Values | Default |
+|---|---|---|
+| Stay on top while scrolling | yes / no | yes |
+| Style | *Glass* (floating frosted bar), *Solid* (full-width surface with a border), *Transparent* | Glass |
+| Arrange items | *Spread* (first left, last right), *Start*, *Center*, *End* | Spread |
+
+Contains *Logo / site name*, *Menu*, *Button*, *Spacer*, *Text* and *HTML*.
+
+### Logo / site name
+Links to the home page. Only in a theme's header or footer.
+
+| Setting | Values | Default |
+|---|---|---|
+| Show | *Logo and text*, *Logo only*, *Text only* | Logo and text |
+| Text | empty = the site title from **Settings** | empty |
+| Show tagline | yes / no | yes |
+| Logo height | 16 to 120 px | 32 |
+
+The logo is the one chosen in **Settings → Logo**. Without a logo, or when its file has been deleted, the block shows
+the text instead, whatever *Show* says.
 
 ## Nesting rules
 
 | Block | May be placed | May contain |
 |---|---|---|
-| Section | top level only | content blocks, Columns, Site header |
+| Section | top level only | content blocks, Columns; in a header or footer also Site bar and Logo / site name |
 | Columns | top level, in a section | Column only |
 | Column | in Columns only | content blocks |
-| Content blocks (Heading, Text, Image, Button, Quote, Spacer, Divider, HTML, Latest posts, Menu) | top level, in a section, in a column | nothing |
-| Site header | in a theme header (top level or section) | nothing |
+| Content blocks (Heading, Text, Image, Button, Quote, Spacer, Divider, HTML, Latest posts, Menu) | top level, in a section, in a column; Button, Menu, Spacer, Text and HTML also in a site bar | nothing |
+| Site bar | header or footer: top level or in a section | Logo / site name, Menu, Button, Spacer, Text, HTML |
+| Logo / site name | header or footer: top level, in a section or a site bar | nothing |
 
 Further limits: at most 1,000 blocks per page and 6 levels of nesting. A content block at the top level of a page
 gets the page container automatically, so it does not run edge to edge.

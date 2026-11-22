@@ -4,33 +4,48 @@
         <div class="card">
             <form method="post" action="/admin/media" enctype="multipart/form-data" class="form-row" style="grid-template-columns:2fr 1fr auto;align-items:end">
                 <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                <div><label for="f">Upload images or PDFs (max 20 MiB each)</label><input id="f" type="file" name="files" multiple required accept="image/png,image/jpeg,image/gif,image/webp,image/avif,application/pdf" /></div>
+                <div><label for="f">Upload images (PNG, JPEG, GIF, WebP, AVIF, ICO) or PDFs, max 20 MiB each</label><input id="f" type="file" name="files" multiple required accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/x-icon,.ico,application/pdf" /></div>
                 <div><label for="g">Group</label><select id="g" name="groupId">@foreach (var g in UploadGroups) { <option value="@g.Id">@g.Name</option> }</select></div>
                 <div><button class="btn-primary">Upload</button></div>
             </form>
         </div>
     }
-    <div class="media-grid">
-        @foreach (var m in Items)
-        {
-            <div class="media-item">
-                @if (m.ContentType.StartsWith("image/", StringComparison.Ordinal)) { <img src="/media/@m.StoredName" alt="@m.FileName" loading="lazy" /> }
-                else { <div style="height:110px;display:grid;place-items:center" class="muted">PDF</div> }
-                <div class="meta">
-                    <span title="@m.FileName">@m.FileName</span>
-                    <form method="post" action="/admin/media/@m.Id/delete" style="margin:0" data-confirm="Delete this file?">
-                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                        <button class="btn-sm btn-danger" title="Delete">✕</button>
-                    </form>
+    <ListFilters Url="Url" Placeholder="Search file names…">
+        <select name="group" aria-label="Group">
+            <option value="">All groups I can see</option>
+            @foreach (var (id, name) in Groups) { <option value="@id" selected="@(id.ToString() == Url["group"])">@name</option> }
+        </select>
+        <select name="kind" aria-label="Kind">
+            <option value="">Images and PDFs</option>
+            <option value="image" selected="@(Url["kind"] == "image")">Images</option>
+            <option value="pdf" selected="@(Url["kind"] == "pdf")">PDFs</option>
+        </select>
+    </ListFilters>
+    <div id="list">
+        <div class="media-grid">
+            @foreach (var m in Result.Items)
+            {
+                <div class="media-item">
+                    @if (m.ContentType.StartsWith("image/", StringComparison.Ordinal)) { <img src="/media/@m.StoredName" alt="@m.FileName" loading="lazy" /> }
+                    else { <div style="height:110px;display:grid;place-items:center" class="muted">PDF</div> }
+                    <div class="meta">
+                        <span title="@m.FileName">@m.FileName</span>
+                        <form method="post" action="/admin/media/@m.Id/delete" style="margin:0" data-confirm="Delete this file? Image blocks that show it become empty.">
+                            <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                            <button class="btn-sm btn-danger" title="Delete">✕</button>
+                        </form>
+                    </div>
+                    <div class="meta muted"><span>@Groups.GetValueOrDefault(m.GroupId) · @(m.Size / 1024) KiB</span></div>
                 </div>
-                <div class="meta muted"><span>@Groups.GetValueOrDefault(m.GroupId) · @(m.Size / 1024) KiB</span></div>
-            </div>
-        }
+            }
+        </div>
+        @if (Result.Total == 0) { <p class="muted">No files.</p> }
+        <Pager Url="Url" Page="Result.Page" TotalPages="Result.TotalPages" Total="Result.Total" From="Result.From" To="Result.To" />
     </div>
-    @if (Items.Count == 0) { <p class="muted">No files yet.</p> }
 </AdminShell>
 @code {
-    [Parameter] public List<MediaItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public PagedResult<MediaItem> Result { get; set; } = default!;
+    [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
     [Parameter] public List<Group> UploadGroups { get; set; } = [];
     [Parameter] public Dictionary<int, string> Groups { get; set; } = [];
     [CascadingParameter] public HttpContext? HttpContext { get; set; }

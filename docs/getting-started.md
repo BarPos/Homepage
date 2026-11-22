@@ -76,15 +76,18 @@ Open `https://www.example.com/admin` and sign in with the account you created. T
 posts you can see and a form to create new ones.
 
 Go to **Settings** first:
-- set the **site title** and **tagline** (shown in the header);
-- set the **public address** (`https://www.example.com`), used in RSS, the sitemap and canonical links.
+- set the **site title** and **tagline** (shown in the header), and optionally a **logo** and **favicon** uploaded in
+  **Media**;
+- set the **public address** (`https://www.example.com`), used in RSS, the sitemap and canonical links;
+- choose the **home page**: a page, or a blog's list of posts.
 
 ## 4. Edit the home page
 
 A fresh site has a sample home page and a sample post. **Pages → Home → Edit** opens the visual editor:
 
 1. Click a block in the page to select it; its settings appear on the right and save as you type.
-2. Click a block in the palette on the left to add it after the selected one, or drag it into the **Layers** tree.
+2. Drag a block from the palette on the left onto the page (a blue line shows where it goes), or into the **Layers**
+   tree. Clicking a block in the palette adds it after the selected one.
 3. Drag blocks in the page or in the layers tree to move them.
 4. Press **Publish**.
 

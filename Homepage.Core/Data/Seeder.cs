@@ -123,9 +123,10 @@ public static class Seeder
             await db.SaveChangesAsync(ct);
             db.Settings.Add(new Setting { Key = SiteSettings.HomePageKey, Value = item.Id.ToString() });
             var post = SamplePost().ToJson();
+            var blogId = await db.Blogs.OrderBy(b => b.Id).Select(b => (int?)b.Id).FirstOrDefaultAsync(ct);
             db.ContentItems.Add(new ContentItem
             {
-                Type = ContentType.Post, GroupId = homeGroup, Slug = "hello-world", Title = "Hello, world",
+                Type = ContentType.Post, GroupId = homeGroup, BlogId = blogId, Slug = "hello-world", Title = "Hello, world",
                 Excerpt = "A first post to show how writing works here: Markdown with other blocks in between.",
                 DraftBlocks = post, Blocks = post, Status = ContentStatus.Published, EverPublished = true,
                 PublishedAtUtc = now, CreatedAtUtc = now, UpdatedAtUtc = now,

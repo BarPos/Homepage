@@ -55,11 +55,13 @@ dotnet ef migrations add <Name> --project Homepage.Server --output-dir Data/Migr
 
 ## Status (first milestone)
 
-**Built:** public site (pages, blog, search, RSS, sitemap, output cache), admin, visual editor (drag and drop in the
-canvas and the layers tree, click-to-add, inspector, device preview, publish), Markdown blocks mixed with visual
-blocks, themes (3 built in, duplicate, live theme editor, header/footer in the visual editor, menus), OTRS-style
-permission groups (users, groups, roles, the three relation screens, effective-permission view), media uploads,
-audit log, settings, self-update service, CLI, release build, installer/updater/backup scripts, CI workflows.
+**Built:** public site (pages, any number of blogs at their own addresses with RSS, search, sitemap, logo, favicon,
+output cache), admin with searchable, filterable, paged lists, visual editor (drag from the palette onto the page or
+into the layers tree, drag in the canvas, inspector, device preview, publish), Markdown blocks mixed with visual
+blocks, themes (3 built in, duplicate, live theme editor, editable header and footer with a site bar and logo block),
+menus (create, rename, delete), OTRS-style permission groups (users, groups, roles, the three relation screens,
+effective-permission view), media uploads, audit log, settings, self-update service, CLI, release build,
+installer/updater/backup scripts, CI workflows.
 
 **Not built yet** (described in techstack.md): undo/redo, inline text editing, splitting and merging Markdown blocks,
 rich-text (Tiptap) block, global blocks, page templates and section presets, theme import/export and theme

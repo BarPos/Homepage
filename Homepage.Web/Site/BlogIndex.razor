@@ -1,20 +1,25 @@
 <CascadingValue Value="Ctx" IsFixed="true">
-    <SiteDocument Title="Blog" UseHtmx="true">
+    <SiteDocument Title="@Heading" Description="@Description" UseHtmx="true" FeedUrl="@FeedUrl">
         <section class="sec sec-narrow pad-lg">
             <div class="container">
-                <h1>Blog</h1>
+                <h1>@Heading</h1>
+                @if (!string.IsNullOrWhiteSpace(Description)) { <p class="muted blog-intro">@Description</p> }
                 <form class="search-form" action="/search" method="get" role="search">
                     <label class="sr-only" for="q">Search</label>
-                    <input id="q" name="q" type="search" placeholder="Search…"
+                    <input id="q" name="q" type="search" placeholder="Search…" value="@Query"
                            hx-get="/search" hx-trigger="input changed delay:300ms" hx-target="#post-list" hx-select="#post-list" hx-swap="outerHTML" />
                 </form>
-                <PostListFragment Posts="Posts" NextSkip="NextSkip" />
+                <PostListFragment Posts="Posts" NextUrl="@NextUrl" />
             </div>
         </section>
     </SiteDocument>
 </CascadingValue>
 @code {
     [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
-    [Parameter, EditorRequired] public List<ContentItem> Posts { get; set; } = [];
-    [Parameter] public int? NextSkip { get; set; }
+    [Parameter, EditorRequired] public List<PostSummary> Posts { get; set; } = [];
+    [Parameter] public string Heading { get; set; } = "Blog";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? NextUrl { get; set; }
+    [Parameter] public string? FeedUrl { get; set; }
+    [Parameter] public string? Query { get; set; }
 }

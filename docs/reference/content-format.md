@@ -16,7 +16,7 @@ Pages, posts, revisions and theme headers and footers are stored as one JSON doc
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "blocks": [
     { "id": "b1f3a9c2d4e", "type": "section",
       "props": { "variant": 1, "background": "bg", "padding": 4 },
@@ -60,7 +60,10 @@ When a block's props change shape between releases, the release adds a content m
 - A document newer than the running release supports is refused, never silently changed.
 - Migrations run step by step and are idempotent: a migrated document is not changed again.
 
-Schema version 1 is the current and only version.
+| Version | Release | Change |
+|---|---|---|
+| 1 | 0.1.0 | First format |
+| 2 | 0.2.0 | The fixed `siteheader` block became an editable `sitebar` holding a `sitebrand` and a `menu` (`V1SiteHeaderToSiteBar`), wherever it was in the tree. The site bar keeps the block's id. |
 
 ## Search text
 
