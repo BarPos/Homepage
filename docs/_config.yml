@@ -1,0 +1,36 @@
+# GitHub Pages site for Homepage (Settings → Pages → Deploy from a branch → main, /docs).
+title: Homepage
+description: Self-hosted website software with a drag-and-drop editor, themes and permission groups.
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
+
+search_enabled: true
+heading_anchors: true
+color_scheme: light
+back_to_top: true
+back_to_top_text: "Back to top"
+footer_content: "Homepage documentation."
+
+url: "https://barpos.github.io"
+baseurl: "/Homepage"
+aux_links:
+  "Homepage on GitHub": "https://github.com/BarPos/Homepage"
+  "Releases": "https://github.com/BarPos/Homepage/releases"
+gh_edit_link: true
+gh_edit_link_text: "Edit this page on GitHub"
+gh_edit_repository: "https://github.com/BarPos/Homepage"
+gh_edit_branch: "main"
+gh_edit_source: docs
+gh_edit_view_mode: "tree"
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - README.md

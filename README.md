@@ -4,7 +4,8 @@ Self-hosted website software: a CMS / blogging platform with a drag-and-drop vis
 OTRS-style permission groups. ASP.NET Core 10, PostgreSQL, static Razor components, htmx + Alpine.js +
 SortableJS. There is no Blazor Server and no SignalR: every interaction is a plain HTTP request.
 
-The design and its reasoning are in [techstack.md](techstack.md).
+**Documentation:** <https://barpos.github.io/Homepage/> (source in [`docs/`](docs/)). The design and its reasoning are
+in [techstack.md](techstack.md).
 
 ## Development
 

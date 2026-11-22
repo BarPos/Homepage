@@ -48,7 +48,7 @@
 #   --secrets-stdin       the same KEY=VALUE lines on standard input
 #   environment           HOMEPAGE_DB_PASSWORD, HOMEPAGE_ADMIN_PASSWORD
 #   prompt                hidden input (interactive mode)
-# Keys: DB_PASSWORD (existing database), ADMIN_PASSWORD (first local account or --reset-password, at least 8 characters).
+# Keys: DB_PASSWORD (existing database), ADMIN_PASSWORD (first local account or --reset-password, at least 10 characters).
 set -Eeuo pipefail
 
 # GitHub repository whose releases (built by .github/workflows/release.yml) install.sh and the server's updater use.
@@ -820,12 +820,12 @@ collect_admin_account() { # asked before anything is changed on the machine
     if [[ -z "$ADMIN_PASSWORD" ]]; then
         [[ $UNATTENDED -eq 0 ]] || die "missing ADMIN_PASSWORD (secrets file, stdin or HOMEPAGE_ADMIN_PASSWORD)"
         while true; do
-            tty_secret ADMIN_PASSWORD "Password for $ADMIN_USER (at least 8 characters)" confirm
+            tty_secret ADMIN_PASSWORD "Password for $ADMIN_USER (at least 10 characters)" confirm
             [[ ${#ADMIN_PASSWORD} -ge 8 ]] && break
             echo "Too short." >/dev/tty
         done
     fi
-    [[ ${#ADMIN_PASSWORD} -ge 8 ]] || die "ADMIN_PASSWORD must have at least 8 characters"
+    [[ ${#ADMIN_PASSWORD} -ge 10 ]] || die "ADMIN_PASSWORD must have at least 10 characters"
     [[ "$ADMIN_PASSWORD" != *$'\n'* ]] || die "ADMIN_PASSWORD must be one line"
 }
 
@@ -1090,12 +1090,12 @@ do_reset_password() {
     if [[ -z "$ADMIN_PASSWORD" ]]; then
         [[ $UNATTENDED -eq 0 ]] || die "missing ADMIN_PASSWORD (secrets file, stdin or HOMEPAGE_ADMIN_PASSWORD)"
         while true; do
-            tty_secret ADMIN_PASSWORD "New password for $RESET_USER (at least 8 characters)" confirm
+            tty_secret ADMIN_PASSWORD "New password for $RESET_USER (at least 10 characters)" confirm
             [[ ${#ADMIN_PASSWORD} -ge 8 ]] && break
             echo "Too short." >/dev/tty
         done
     fi
-    [[ ${#ADMIN_PASSWORD} -ge 8 && "$ADMIN_PASSWORD" != *$'\n'* ]] || die "the password must be one line of at least 8 characters"
+    [[ ${#ADMIN_PASSWORD} -ge 10 && "$ADMIN_PASSWORD" != *$'\n'* ]] || die "the password must be one line of at least 10 characters"
     # The password goes through stdin, never the command line.
     printf '%s\n' "$ADMIN_PASSWORD" | run_server "$INSTALL_ROOT/current" --reset-local-password "$RESET_USER" 2>&1 |
         grep -vE '^(info|warn|dbug|trce): |^      ' || true
