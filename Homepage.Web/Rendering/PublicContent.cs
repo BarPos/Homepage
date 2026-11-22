@@ -7,23 +7,20 @@ namespace Homepage.Web.Rendering;
 
 /// <summary>A published page or post in a list, with its public URL.</summary>
 public sealed record PostSummary(int Id, ContentType Type, string Title, string Slug, string Excerpt, DateTime? PublishedAtUtc,
-    DateTime UpdatedAtUtc, int? BlogId, string Url, string? Author = null);
+    DateTime UpdatedAtUtc, int? BlogId, string Url, string? Author = null, bool NoIndex = false);
 
 /// <summary>Read-only queries for the public site: published items only.</summary>
-public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMemoryCache cache, BlogService blogs)
+public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMemoryCache cache, SiteTree tree)
 {
-    /// <summary>/{slug} for pages, /{blog}/{slug} for posts.</summary>
-    public static string Url(ContentType type, string slug, int? blogId, IReadOnlyDictionary<int, string> blogSlugs) =>
-        type == ContentType.Page ? "/" + slug
-        : "/" + (blogId is { } b && blogSlugs.TryGetValue(b, out var bs) ? bs : "blog") + "/" + slug;
-
     private async Task<List<PostSummary>> ToSummariesAsync(IQueryable<ContentItem> q, CancellationToken ct)
     {
-        var slugs = await blogs.SlugsAsync(ct);
-        var rows = await q.Select(c => new { c.Id, c.Type, c.Title, c.Slug, c.Excerpt, c.PublishedAtUtc, c.UpdatedAtUtc, c.BlogId, c.AuthorId }).ToListAsync(ct);
+        var map = await tree.GetAsync(ct);
+        var rows = await q.Select(c => new { c.Id, c.Type, c.Title, c.Slug, c.Excerpt, c.PublishedAtUtc, c.UpdatedAtUtc, c.BlogId, c.AuthorId, c.ParentId,
+            c.InheritTheme, c.ThemeId, c.Layout, c.NoIndex }).ToListAsync(ct);
         var authors = await AuthorNamesAsync(rows.Where(r => r.Type == ContentType.Post).Select(r => r.AuthorId), ct);
         return rows.Select(c => new PostSummary(c.Id, c.Type, c.Title, c.Slug, c.Excerpt, c.PublishedAtUtc, c.UpdatedAtUtc, c.BlogId,
-            Url(c.Type, c.Slug, c.BlogId, slugs), c.AuthorId is { } a ? authors.GetValueOrDefault(a) : null)).ToList();
+            map.Url(c.Type, c.Id, c.Slug, c.BlogId), c.AuthorId is { } a ? authors.GetValueOrDefault(a) : null,
+            map.EffectiveFor(c.Type, c.ParentId, c.BlogId, new PageOptionValues(c.InheritTheme, c.ThemeId, c.Layout, c.NoIndex)).NoIndex)).ToList();
     }
 
     /// <summary>Display names of the given users (cached briefly; names change rarely).</summary>

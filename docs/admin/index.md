@@ -83,12 +83,31 @@ URL, so a view can be bookmarked or shared. The relation screens under **Users &
   `dc:creator` in the feeds. The display name starts out as the user name, so set one on **Your profile** if your
   login name should not be public. Posts whose account was deleted, and the example post made at install, show no
   author.
+- A page can be **under another page** (a subpage): choose *Under page* when you create it, or *Parent page* in its
+  settings. Its address starts with the parent's: `/about/team`, `/about/team/jobs`, as deep as you like (64 levels is
+  the technical limit). A page with subpages or blogs under it cannot be deleted until they are moved or deleted.
 - The address is made from the title (`About us` → `/about-us`) and can be changed in the item's settings.
-  - **Pages and blogs share the first part of the address**: a page cannot take a blog's address and the other way
-    round. A page titled like a blog gets a number (`/releases-2`).
+  - **Pages and blogs share addresses**: under the same parent (or at the top level) a page cannot take a blog's
+    address and the other way round. A page titled like a blog gets a number (`/releases-2`).
   - A few addresses belong to the site itself: `admin`, `search`, `media`, `theme`, `healthz`, `content`,
     `feed-xml`, `sitemap-xml`, `robots-txt`, `hp`.
   - A post's address only has to be unique within its blog.
+
+## Appearance and search engines
+
+Each page and post has **Appearance and search engines** settings (in its settings page). **Subpages inherit them**:
+each setting is *Same as the parent page* until you choose something else, and the settings page shows what that
+currently is. Posts, and the post list of a blog that lives under a page, take them from that page.
+
+| Setting | |
+|---|---|
+| Theme | Same as the parent page, the site's theme, or another theme (for a landing page with its own colors, header and footer). Any theme can be used, also one that is not active. A top-level page uses the site's theme unless you choose one. |
+| Layout | Same as the parent page, or: header and footer (the default at the top level), no header, no footer, blank (neither) |
+| Search engines | Same as the parent page, let them index it (the default at the top level), or ask them not to: a `<meta name="robots" content="noindex">` tag, and the page is left out of the sitemap. Search engines respect it; visitors can still open the page. |
+| Custom CSS | Extra CSS, added after the theme's and after the CSS of the pages above, so it applies to this page and the pages under it (sanitized like a theme's custom CSS). Needs `themes: rw`. |
+
+On a published item these change the live page (and the pages that inherit them) at once, so they need `publish`.
+The editor's canvas shows the page with the theme and layout in effect.
 
 ## The home page
 

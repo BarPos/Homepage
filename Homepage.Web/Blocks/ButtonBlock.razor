@@ -1,7 +1,40 @@
-@{ var p = Node.PropsAs<ButtonProps>(); var url = SafeUrlAttribute.IsSafe(p.Url) ? p.Url : "#"; }
+@inject PublicContent Content
+@{
+    var p = Node.PropsAs<ButtonProps>();
+    var href = SafeUrlAttribute.IsSafe(p.Url) ? Ctx.Href(p.Url) : null;
+    var icon = _iconUrl is null ? Icons.Get(p.Icon) : null;
+    var after = p.IconPosition == IconPosition.AfterText;
+}
+@* A link to a page that is gone or unpublished: no button on the public site; a note in the editor. *@
+@{ if (href is null && !Ctx.Edit) return; }
 <p class="blk @Css.Align(p.Align)">
-    <a class="btn btn-@p.Style.ToString().ToLowerInvariant()" href="@url">@p.Text</a>
+    @if (href is null) { <span class="hp-missing-link">The page this button links to is gone. Choose another link.</span> }
+    <a class="btn btn-@p.Style.ToString().ToLowerInvariant()" href="@(href ?? "#")" target="@(p.NewTab ? "_blank" : null)" rel="@(p.NewTab ? "noopener noreferrer" : null)">
+        @if (!after) { @IconMarkup(icon) }
+        <span>@p.Text</span>
+        @if (after) { @IconMarkup(icon) }
+        @if (p.NewTab) { <span class="sr-only"> (opens in a new tab)</span> }
+    </a>
 </p>
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+    private string? _iconUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Node.PropsAs<ButtonProps>().IconMediaId is { } id) _iconUrl = await Content.MediaUrlAsync(id);
+    }
+
+    private RenderFragment IconMarkup(Icons.Icon? icon) => __builder =>
+    {
+        if (_iconUrl is not null)
+        {
+            <img class="btn-icon" src="@_iconUrl" alt="" />
+        }
+        else if (icon is not null)
+        {
+            @((MarkupString)Icons.Svg(icon, "btn-icon"))
+        }
+    };
 }

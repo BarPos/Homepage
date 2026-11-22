@@ -1,4 +1,17 @@
-<AdminShell Title="@($"Settings: {Item.Title}")" Section="@(Item.Type == ContentType.Post ? "posts" : "pages")">
+<AdminShell Title="@Item.Title" Section="@(Item.Type == ContentType.Post ? "posts" : "pages")" Subtitle="@PublicUrl"
+            Back="@(Item.Type == ContentType.Post ? "/admin/content?type=post" : "/admin/content?type=page")" BackText="@(Item.Type == ContentType.Post ? "Posts" : "Pages")">
+    <Badges>
+        @if (Item.Status == ContentStatus.Published) { <span class="badge badge-ok">Published</span> } else { <span class="badge">Draft</span> }
+        @if (IsHome) { <span class="badge badge-ok">home</span> }
+        @if (Effective.NoIndex) { <span class="badge" title="Search engines are asked not to index it">no index</span> }
+        @if (Effective.ThemeId is { } et) { <span class="badge" title="Not the site's theme">@ThemeName(et)</span> }
+    </Badges>
+    <Actions>
+        <a class="btn btn-primary" href="/admin/editor/content-@Item.Id">Open in editor</a>
+        @if (Item.Status == ContentStatus.Published) { <a class="btn" target="_blank" rel="noopener" href="@PublicUrl">View ↗</a> }
+    </Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
     @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
     <div class="grid2">
         <div class="card">
@@ -6,6 +19,15 @@
                 <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                 <label for="t">Title</label>
                 <input id="t" name="title" type="text" value="@Item.Title" required maxlength="300" disabled="@(!CanEdit)" />
+                @if (Item.Type == ContentType.Page)
+                {
+                    <label for="pp">Parent page</label>
+                    <select id="pp" name="parentId" data-search disabled="@(!CanEdit)">
+                        <option value="0" selected="@(Item.ParentId is null)">(none, top level)</option>
+                        @foreach (var p in Parents) { <option value="@p.Id" selected="@(p.Id == Item.ParentId)">@p.Path · @p.Title</option> }
+                    </select>
+                    <div class="help">A subpage's address starts with its parent's: <code>/about/team</code>.</div>
+                }
                 <label for="s">Address</label>
                 <input id="s" name="slug" type="text" value="@Item.Slug" required maxlength="200" disabled="@(!CanEdit)" />
                 <div class="help">@PublicUrl</div>
@@ -15,12 +37,12 @@
                 @if (Item.Type == ContentType.Post)
                 {
                     <label for="b">Blog</label>
-                    <select id="b" name="blogId" disabled="@(!CanEdit)">
-                        @foreach (var bl in Blogs) { <option value="@bl.Id" selected="@(bl.Id == Item.BlogId)">@bl.Name (/@bl.Slug)</option> }
+                    <select id="b" name="blogId" data-search disabled="@(!CanEdit)">
+                        @foreach (var bl in Blogs) { <option value="@bl.Id" selected="@(bl.Id == Item.BlogId)">@bl.Name (@BlogPaths.GetValueOrDefault(bl.Id))</option> }
                     </select>
                 }
                 <label for="g">Group</label>
-                <select id="g" name="groupId" disabled="@(!CanEdit)">
+                <select id="g" name="groupId" data-search disabled="@(!CanEdit)">
                     @foreach (var g in MoveTargets) { <option value="@g.Id" selected="@(g.Id == Item.GroupId)">@g.Name</option> }
                 </select>
                 <div class="help">Moving to another group needs rw here and create there.</div>
@@ -28,14 +50,39 @@
             </form>
         </div>
         <div class="card">
+            <h2 class="card-title">Appearance and search engines</h2>
+            <form method="post" action="/admin/content/@Item.Id/options">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <label for="th">Theme</label>
+                <select id="th" name="theme" disabled="@(!CanEdit)" data-search>
+                    <option value="inherit" selected="@(Item.InheritTheme || (!HasParent && Item.ThemeId is null))">@(HasParent ? $"Same as {ParentLabel} ({ThemeName(Inherited.ThemeId)})" : $"The site's theme ({ActiveThemeName})")</option>
+                    @if (HasParent) { <option value="site" selected="@(!Item.InheritTheme && Item.ThemeId is null)">The site's theme (@ActiveThemeName)</option> }
+                    @foreach (var t in Themes) { <option value="@t.Id" selected="@(!Item.InheritTheme && t.Id == Item.ThemeId)">@t.Name</option> }
+                </select>
+                <div class="help">Another theme for this @Noun@(Item.Type == ContentType.Page ? " and the pages under it" : ""), for example a landing page with its own colors, header and footer.</div>
+                <label for="ly">Layout</label>
+                <select id="ly" name="layout" disabled="@(!CanEdit)">
+                    <option value="inherit" selected="@(Item.Layout is null)">@(HasParent ? $"Same as {ParentLabel} ({LayoutName(Inherited.Layout)})" : "Header and footer (default)")</option>
+                    @foreach (var l in Enum.GetValues<PageLayout>()) { <option value="@l" selected="@(Item.Layout == l)">@LayoutName(l)</option> }
+                </select>
+                <label for="ni">Search engines</label>
+                <select id="ni" name="noIndex" disabled="@(!CanEdit)">
+                    <option value="inherit" selected="@(Item.NoIndex is null)">@(HasParent ? $"Same as {ParentLabel} ({(Inherited.NoIndex ? "not indexed" : "indexed")})" : "Let search engines index it (default)")</option>
+                    @if (HasParent) { <option value="false" selected="@(Item.NoIndex == false)">Let search engines index it</option> }
+                    <option value="true" selected="@(Item.NoIndex == true)">Ask search engines not to index it</option>
+                </select>
+                <div class="help">Not indexed: a <code>noindex</code> tag and left out of the sitemap. Search engines respect it; it does not hide the @Noun from visitors.</div>
+                <label for="pc">Custom CSS for this @Noun</label>
+                <textarea id="pc" name="customCss" rows="6" placeholder=".site-main { … }" disabled="@(!CanEdit || !CanEditCss)">@Item.CustomCss</textarea>
+                <div class="help">@(CanEditCss ? (Item.Type == ContentType.Page ? "Added after the theme's CSS and the CSS of the pages above; the pages under this one get it too." : "Added after the theme's CSS and the CSS of the page above.") : "Needs themes: rw.")</div>
+                @if (!CanEditCss) { <input type="hidden" name="customCss" value="@Item.CustomCss" /> }
+                @if (CanEdit) { <div class="form-actions"><button class="btn-primary">Save</button></div> }
+            </form>
+        </div>
+        <div class="card">
             <h2 class="card-title">Publishing</h2>
             <p>Status: @StatusText <span class="muted">@FirstPublished</span></p>
             <div class="form-actions">
-                <a class="btn" href="/admin/editor/content-@Item.Id">Open in editor</a>
-                @if (Item.Status == ContentStatus.Published)
-                {
-                    <a class="btn" target="_blank" href="@PublicUrl">View ↗</a>
-                }
                 @if (CanPublish)
                 {
                     <form method="post" action="/admin/content/@Item.Id/publish">
@@ -78,6 +125,7 @@
             </ul>
         </div>
     </div>
+    </ChildContent>
 </AdminShell>
 @code {
     [Parameter] public ContentItem Item { get; set; } = default!;
@@ -87,11 +135,29 @@
     [Parameter] public bool CanPublish { get; set; }
     [Parameter] public bool CanDelete { get; set; }
     [Parameter] public string? Error { get; set; }
+    [Parameter] public string? Message { get; set; }
     [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
     [Parameter] public bool CanSetHome { get; set; }
     [Parameter] public bool IsHome { get; set; }
     [CascadingParameter] public HttpContext? HttpContext { get; set; }
-    private string PublicUrl => PublicContent.Url(Item.Type, Item.Slug, Item.BlogId, Blogs.ToDictionary(b => b.Id, b => b.Slug));
+    public sealed record ParentChoice(int Id, string Path, string Title);
+    [Parameter] public List<ParentChoice> Parents { get; set; } = [];
+    [Parameter] public List<Theme> Themes { get; set; } = [];
+    [Parameter] public string ActiveThemeName { get; set; } = "";
+    [Parameter] public bool CanEditCss { get; set; }
+    [Parameter] public string PublicUrl { get; set; } = "";
+    [Parameter] public Dictionary<int, string> BlogPaths { get; set; } = [];
+    private string Noun => Item.Type == ContentType.Post ? "post" : "page";
+    /// <summary>The options of the page above (what "Same as …" means), and those in effect here.</summary>
+    [Parameter] public PageOptions Inherited { get; set; } = PageOptions.SiteDefault;
+    [Parameter] public PageOptions Effective { get; set; } = PageOptions.SiteDefault;
+    [Parameter] public bool HasParent { get; set; }
+    private string ParentLabel => Item.Type == ContentType.Page ? "the parent page" : "the page the blog is under";
+    private string ThemeName(int? id) => id is { } t ? Themes.FirstOrDefault(x => x.Id == t)?.Name ?? "?" : ActiveThemeName;
+    private static string LayoutName(PageLayout l) => l switch
+    {
+        PageLayout.NoHeader => "No header", PageLayout.NoFooter => "No footer", PageLayout.Blank => "Blank (no header or footer)", _ => "Header and footer",
+    };
     private string StatusText => Item.Status == ContentStatus.Published ? "Published" : "Draft";
     private string FirstPublished => Item.PublishedAtUtc is { } p ? "· first published " + p.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "";
     private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";

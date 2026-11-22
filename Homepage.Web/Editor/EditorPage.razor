@@ -1,5 +1,8 @@
 <AdminShell Title="@Doc.Title" Full="true" BodyClass="editor">
-    <Scripts><script src="@Asset.Url("lib/Sortable.min.js")" defer></script><script src="@Asset.Url("js/editor.js")" defer></script></Scripts>
+    <Scripts><script src="@Asset.Url("lib/Sortable.min.js")" defer></script><script src="@Asset.Url("js/editor.js")" defer></script>
+        <link rel="stylesheet" href="@Asset.Url("lib/toastui/toastui-editor.css")" />
+        <link rel="stylesheet" href="@Asset.Url("lib/toastui/toastui-editor-dark.css")" />
+        <script src="@Asset.Url("lib/toastui/toastui-editor.min.js")" defer></script><script src="@Asset.Url("js/md-editor.js")" defer></script></Scripts>
     <ChildContent>
     <div class="ed-bar" data-editor data-target="@Doc.Target" data-region="@Region" data-readonly="@(Doc.CanEdit ? null : "1")">
         <a class="btn btn-sm" href="@BackUrl">← Back</a>

@@ -8,5 +8,7 @@
     [Parameter, EditorRequired] public ContentItem Item { get; set; } = default!;
     [Parameter, EditorRequired] public BlockTree Tree { get; set; } = default!;
     [Parameter] public bool IsHome { get; set; }
-    private string? Canonical => string.IsNullOrEmpty(Ctx.Site.BaseUrl) ? null : Ctx.Site.BaseUrl.TrimEnd('/') + (IsHome ? "/" : "/" + Item.Slug);
+    /// <summary>The page's address (/parent/child).</summary>
+    [Parameter] public string Path { get; set; } = "/";
+    private string? Canonical => string.IsNullOrEmpty(Ctx.Site.BaseUrl) || Ctx.NoIndex ? null : Ctx.Site.BaseUrl.TrimEnd('/') + (IsHome ? "/" : Path);
 }

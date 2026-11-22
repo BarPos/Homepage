@@ -211,3 +211,8 @@ html[data-glass="off"] .bar-glass .site-bar-inner{width:100%;border:0;box-shadow
 }
 .blog-intro{font-size:1.1em;margin-top:-.2em}
 .post-blog{color:inherit}
+/* button icons (inline SVG or an image), sized to the text */
+.btn-icon{width:1.1em;height:1.1em;flex:none;object-fit:contain;display:inline-block;vertical-align:-.15em}
+img.btn-icon{border-radius:2px}
+.menu a{display:inline-flex;align-items:center;gap:.45em}
+.menu-icon{width:1em;height:1em;flex:none}

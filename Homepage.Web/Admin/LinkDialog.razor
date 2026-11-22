@@ -1,0 +1,9 @@
+@* Chooser for links: pages, blogs and posts of this site. Open with <button data-open-dialog="link-dialog" data-link-for="input id">. *@
+<dialog id="link-dialog" class="modal link-modal" aria-labelledby="link-dialog-title" data-light-dismiss>
+    <h2 id="link-dialog-title">Link to a page, blog or post</h2>
+    <input type="search" name="q" placeholder="Search titles and addresses…" autocomplete="off" aria-label="Search pages, blogs and posts"
+           hx-get="/admin/editor/links" hx-trigger="input changed delay:200ms, load" hx-target="#link-results" hx-swap="innerHTML" />
+    <div id="link-results" class="link-results" role="listbox" aria-label="Pages, blogs and posts"></div>
+    <p class="help">The link follows the page when it is renamed or moved. For a link to another site, close this and type the address (https://…) in the field.</p>
+    <div class="modal-actions"><button type="button" data-close-dialog>Close</button></div>
+</dialog>

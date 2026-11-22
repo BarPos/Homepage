@@ -21,6 +21,7 @@
     </ItemGroup>
     <ItemGroup>
         <EmbeddedResource Include="Themes\BuiltIn\*.json" />
+        <EmbeddedResource Include="Blocks\Icons\fontawesome-free.json" LogicalName="Homepage.Blocks.Icons.fontawesome-free.json" />
     </ItemGroup>
     <ItemGroup>
         <InternalsVisibleTo Include="Homepage.Tests" />

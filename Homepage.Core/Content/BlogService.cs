@@ -33,10 +33,15 @@ public sealed class BlogService(IDbContextFactory<AppDbContext> dbFactory, IMemo
     public async Task<Dictionary<int, string>> SlugsAsync(CancellationToken ct = default) =>
         (await AllAsync(ct)).ToDictionary(b => b.Id, b => b.Slug);
 
-    public void Invalidate() => cache.Remove(CacheKey);
+    public void Invalidate()
+    {
+        cache.Remove(CacheKey);
+        SiteTree.Changed();
+    }
 
+    /// <param name="parentPageId">The page the blog lives under; null = top level (/{slug}).</param>
     public async Task<Blog> SaveAsync(EffectivePermissions p, int? id, string name, string slug, string description, int postsPerPage,
-        string actor, CancellationToken ct = default)
+        string actor, CancellationToken ct = default, int? parentPageId = null)
     {
         if (!p.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Blogs need layout: rw.");
         name = name.Trim();
@@ -51,23 +56,29 @@ public sealed class BlogService(IDbContextFactory<AppDbContext> dbFactory, IMemo
             blog = new Blog { CreatedAtUtc = time.GetUtcNow().UtcDateTime };
             db.Blogs.Add(blog);
         }
-        if (await SiteAddresses.WhyTakenAsync(db, slug, exceptBlogId: blog.Id == 0 ? null : blog.Id, ct: ct) is { } why)
+        if (parentPageId is { } pid && !await db.ContentItems.AnyAsync(c => c.Id == pid && c.Type == ContentType.Page, ct))
+            throw new NotFoundException("The parent page does not exist.");
+        if (await SiteAddresses.WhyTakenAsync(db, slug, exceptBlogId: blog.Id == 0 ? null : blog.Id, ct: ct, parentPageId: parentPageId) is { } why)
             throw new ConflictException(why);
-        if (blog.Id != 0 && blog.Slug != slug)
+        // Addresses are paths without the leading slash ("releases", "docs/releases").
+        var newPath = ((parentPageId is { } pp ? await SiteTree.PagePathAsync(db, pp, ct) : "") + "/" + slug).TrimStart('/');
+        if (blog.Id != 0)
         {
+            var oldPath = ((blog.ParentPageId is { } op ? await SiteTree.PagePathAsync(db, op, ct) : "") + "/" + blog.Slug).TrimStart('/');
             // Keep the old address working: requests to it are redirected (301) to the new one.
-            blog.PreviousSlugs = blog.PreviousSlugs.Where(s => s != slug).Prepend(blog.Slug).Distinct().Take(10).ToList();
+            if (oldPath != newPath) blog.PreviousSlugs = blog.PreviousSlugs.Where(s => s != newPath).Prepend(oldPath).Distinct().Take(10).ToList();
         }
         // An address can only redirect to one blog.
-        foreach (var other in await db.Blogs.Where(b => b.Id != blog.Id && b.PreviousSlugs.Contains(slug)).ToListAsync(ct))
-            other.PreviousSlugs = other.PreviousSlugs.Where(s => s != slug).ToList();
+        foreach (var other in await db.Blogs.Where(b => b.Id != blog.Id && b.PreviousSlugs.Contains(newPath)).ToListAsync(ct))
+            other.PreviousSlugs = other.PreviousSlugs.Where(s => s != newPath).ToList();
         blog.Name = name;
         blog.Slug = slug;
+        blog.ParentPageId = parentPageId;
         blog.Description = description.Trim().Length > 500 ? description.Trim()[..500] : description.Trim();
         blog.PostsPerPage = Math.Clamp(postsPerPage, 1, 50);
         await db.SaveChangesAsync(ct);
         Invalidate();
-        await audit.WriteAsync(actor, id is null ? "blog.create" : "blog.update", "Blog", blog.Id.ToString(), $"{name} /{slug}", ct: ct);
+        await audit.WriteAsync(actor, id is null ? "blog.create" : "blog.update", "Blog", blog.Id.ToString(), $"{name} /{newPath}", ct: ct);
         return blog;
     }
 

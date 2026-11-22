@@ -13,35 +13,44 @@
                 <label for="bu">Public address</label><input id="bu" name="baseUrl" type="text" value="@S.BaseUrl" placeholder="https://example.com" maxlength="300" />
                 <div class="help">Used for RSS, the sitemap and canonical links. Leave empty to use the request's address.</div>
                 <label for="hp">Home page (what <code>/</code> shows)</label>
-                <select id="hp" name="home">
+                <select id="hp" name="home" data-search>
                     <optgroup label="Pages">
-                        @foreach (var p in Pages) { <option value="page:@p.Id" selected="@(p.Id == S.HomePageId)">@p.Title (/@p.Slug)</option> }
+                        @foreach (var p in Pages) { <option value="page:@p.Id" selected="@(p.Id == S.HomePageId)">@p.Title (@(_map?.PagePath(p.Id) ?? "/" + p.Slug))</option> }
                     </optgroup>
                     <optgroup label="Blogs: the list of posts">
-                        @foreach (var b in Blogs) { <option value="blog:@b.Id" selected="@(S.HomePageId is null && (S.HomeBlogId ?? Blogs.FirstOrDefault()?.Id) == b.Id)">@b.Name (/@b.Slug)</option> }
+                        @foreach (var b in Blogs) { <option value="blog:@b.Id" selected="@(S.HomePageId is null && (S.HomeBlogId ?? Blogs.FirstOrDefault()?.Id) == b.Id)">@b.Name (@(_map?.BlogPath(b.Id) ?? "/" + b.Slug))</option> }
                     </optgroup>
                 </select>
                 <div class="help">Only published pages are listed. A page can also be chosen with <em>Use as home page</em> in its settings.</div>
                 <label for="lg">Logo</label>
                 <div class="toolbar" style="margin:0">
-                    <select id="lg" name="logoMediaId" style="flex:1">
+                    <select id="lg" name="logoMediaId" style="flex:1" data-search>
                         <option value="">No logo: show the site title as text</option>
-                        @foreach (var m in Images) { <option value="@m.Id" selected="@(m.Id == S.LogoMediaId)">@m.FileName</option> }
+                        @foreach (var m in Images) { <option value="@m.Id" selected="@(m.Id == S.LogoMediaId)" data-thumb="/media/@m.StoredName">@m.FileName</option> }
                     </select>
                     @if (LogoUrl is not null) { <img class="thumb" src="@LogoUrl" alt="" /> }
                 </div>
                 <div class="help">Shown by the <em>Logo / site name</em> block in the header. If the file is deleted, the title is shown instead.</div>
-                <label for="fv">Favicon</label>
-                <div class="toolbar" style="margin:0">
-                    <select id="fv" name="faviconMediaId" style="flex:1">
-                        <option value="">None</option>
-                        @foreach (var m in Images) { <option value="@m.Id" selected="@(m.Id == S.FaviconMediaId)">@m.FileName</option> }
-                    </select>
-                    @if (FaviconUrl is not null) { <img class="thumb" src="@FaviconUrl" alt="" style="width:32px;height:32px" /> }
-                </div>
-                <div class="help">A square PNG (at least 180 × 180) or an ICO file from <a href="/admin/media">Media</a>. SVG is not accepted.</div>
+                <fieldset class="favicons">
+                    <legend>Favicon</legend>
+                    <p class="help">Give one or more: each browser uses the best format it supports. Upload them in <a href="/admin/media">Media</a>.</p>
+                    @foreach (var (name, label, help, types, current) in FaviconSlots)
+                    {
+                        <div class="favicon-row">
+                            <span class="favicon-thumb">@if (Images.FirstOrDefault(m => m.Id == current) is { } f) { <img src="/media/@f.StoredName" alt="" /> } else { <span class="muted">—</span> }</span>
+                            <div>
+                                <label for="@name">@label</label>
+                                <select id="@name" name="@name" data-search>
+                                    <option value="">None</option>
+                                    @foreach (var m in Images.Where(m => types.Contains(m.ContentType))) { <option value="@m.Id" selected="@(m.Id == current)" data-thumb="/media/@m.StoredName">@m.FileName</option> }
+                                </select>
+                                <div class="help">@help</div>
+                            </div>
+                        </div>
+                    }
+                </fieldset>
                 <label for="dg">Default group for new content</label>
-                <select id="dg" name="defaultGroupId">
+                <select id="dg" name="defaultGroupId" data-search>
                     @foreach (var g in Groups) { <option value="@g.Id" selected="@(g.Id == S.DefaultGroupId)">@g.Name</option> }
                 </select>
                 <div class="form-actions"><button class="btn-primary">Save</button></div>
@@ -89,7 +98,12 @@
     [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
     [Parameter] public List<MediaItem> Images { get; set; } = [];
     private string? LogoUrl => Images.FirstOrDefault(m => m.Id == S.LogoMediaId) is { } m ? "/media/" + m.StoredName : null;
-    private string? FaviconUrl => Images.FirstOrDefault(m => m.Id == S.FaviconMediaId) is { } m ? "/media/" + m.StoredName : null;
+    private (string Name, string Label, string Help, string[] Types, int? Current)[] FaviconSlots =>
+    [
+        ("faviconSvgMediaId", "SVG", "Sharp at every size; modern browsers prefer it. Can follow light and dark mode with a media query inside the file.", ["image/svg+xml"], S.FaviconSvgMediaId),
+        ("faviconMediaId", "PNG", "Square, at least 180 × 180. Also the icon when the site is added to an iPhone or iPad home screen.", ["image/png", "image/x-icon"], S.FaviconMediaId),
+        ("faviconIcoMediaId", "ICO", "For older browsers and tools that only ask for /favicon.ico.", ["image/x-icon"], S.FaviconIcoMediaId),
+    ];
     [Parameter] public List<Group> Groups { get; set; } = [];
     [Parameter, EditorRequired] public Homepage.Updates.UpdateStatus Update { get; set; } = default!;
     [Parameter] public string? Message { get; set; }
@@ -97,4 +111,7 @@
     private string UpdateTitle => $"Update to {Update.Latest?.Version}?";
     [CascadingParameter] public HttpContext? HttpContext { get; set; }
     private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    [Inject] public SiteTree Tree { get; set; } = default!;
+    private SiteMap? _map;
+    protected override async Task OnInitializedAsync() => _map = await Tree.GetAsync();
 }

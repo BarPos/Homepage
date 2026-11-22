@@ -2,11 +2,18 @@
 @{ var p = Node.PropsAs<MenuProps>(); }
 <nav class="blk" aria-label="Menu">
     <ul class="menu @Css.Align(p.Align)">
-        @foreach (var link in _links) { <li><a href="@link.Url">@link.Label</a></li> }
+        @foreach (var link in _links)
+        {
+            var icon = Icons.Get(link.Icon);
+            var href = Ctx.Href(link.Url);
+            if (href is null) continue; // the page it pointed at is gone or not published
+            <li><a href="@href" target="@(link.NewTab ? "_blank" : null)" rel="@(link.NewTab ? "noopener noreferrer" : null)">@if (icon is not null) { @((MarkupString)Icons.Svg(icon, "menu-icon")) }<span>@link.Label</span>@if (link.NewTab) { <span class="sr-only"> (opens in a new tab)</span> }</a></li>
+        }
     </ul>
 </nav>
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
     private IReadOnlyList<MenuLink> _links = [];
     protected override async Task OnInitializedAsync() => _links = await Menus.GetLinksAsync(Node.PropsAs<MenuProps>().MenuKey);
 }

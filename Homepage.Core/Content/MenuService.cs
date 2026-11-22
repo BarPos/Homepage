@@ -8,7 +8,9 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Homepage.Content;
 
-public sealed record MenuLink(string Label, string Url);
+/// <param name="Icon">A Font Awesome icon ("solid:house"), shown before the label; empty = none.</param>
+/// <param name="NewTab">Open the link in a new tab.</param>
+public sealed record MenuLink(string Label, string Url, string? Icon = null, bool NewTab = false);
 
 public sealed class MenuService(IDbContextFactory<AppDbContext> dbFactory, IMemoryCache cache, IAuditLog audit)
 {
@@ -73,7 +75,9 @@ public sealed class MenuService(IDbContextFactory<AppDbContext> dbFactory, IMemo
         var clean = links.Where(l => !string.IsNullOrWhiteSpace(l.Label)).Select(l =>
         {
             if (!SafeUrlAttribute.IsSafe(l.Url)) throw new BlockException($"'{l.Url}' is not an allowed link.");
-            return new MenuLink(l.Label.Trim()[..Math.Min(l.Label.Trim().Length, 100)], l.Url.Trim());
+            var icon = string.IsNullOrWhiteSpace(l.Icon) ? null : l.Icon.Trim();
+            if (icon is not null && !Icons.Exists(icon)) throw new BlockException($"'{icon}' is not a known icon.");
+            return new MenuLink(l.Label.Trim()[..Math.Min(l.Label.Trim().Length, 100)], l.Url.Trim(), icon, l.NewTab);
         }).Take(50).ToList();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var menu = await db.Menus.FirstOrDefaultAsync(m => m.Key == key, ct) ?? throw new NotFoundException();

@@ -12,6 +12,8 @@ nav_order: 2
 |---|---|---|
 | `/` | The home page chosen in **Settings**: a page, or a blog's posts | yes |
 | `/<slug>` | A published page, or a blog's posts (the blog's page size; `?skip=N` for more, htmx *Load more*) | yes |
+| `/<page>/<subpage>/…` | A subpage (up to 8 levels) | yes |
+| `/<page>/<blog>`, `/<page>/<blog>/<slug>` | A blog under a page, and its posts and feed | yes |
 | `/<blog>/<slug>` | A published post of that blog | yes |
 | `/<blog>/feed.xml` | RSS 2.0 of the blog's 20 latest posts | yes |
 | `/<old blog address>…` | `301` to the blog's current address (after a rename) | yes |
@@ -19,6 +21,7 @@ nav_order: 2
 | `/feed.xml` | RSS 2.0 of the 20 latest posts of all blogs | yes |
 | `/sitemap.xml` | Every blog, published page and post | yes |
 | `/robots.txt` | Disallows `/admin/`, points at the sitemap | yes |
+| `/favicon.ico` | Redirects to the ICO favicon (or the PNG, or the SVG) chosen in the settings; `404` without one | no |
 | `/hp/event` (POST) | Page views and engagement time from the analytics script (JSON, at most 4 KB; only from this site's pages; `204`, or `429` above 120 per minute per network) | no |
 | `/media/<file>` | An uploaded file, one-year immutable cache | browser |
 | `/theme/<id>/<version>.css` | The CSS variables of a theme version, one-year immutable cache | browser |
@@ -40,7 +43,8 @@ All under `/admin`, signed in (except `login`), never cached. POST requests need
 | `/admin` | Dashboard |
 | `/admin/content?type=page\|post&q=&group=&blog=&status=&sort=&size=&page=` | Lists (`status`: `draft`, `published`, `changed`; `sort`: `title`, `published`) |
 | `/admin/content/new` (POST) | Create |
-| `/admin/content/<id>` | Item settings; `/publish`, `/unpublish`, `/delete`, `/home` (POST) |
+| `/admin/content/<id>` | Item settings (with `parentId` for pages); `/options` (theme, layout, CSS, no-index), `/publish`, `/unpublish`, `/delete`, `/home` (POST) |
+| `/admin/editor/icons?q=`, `/admin/editor/links?q=` | The icon chooser and the link chooser (HTML fragments) |
 | `/admin/editor/<target>` | Visual editor. `<target>` is `content-<id>`, `header-<themeId>` or `footer-<themeId>`. |
 | `/admin/editor/<target>/canvas`, `/tree`, `/layers`, `/inspector/<blockId>` | Editor parts (HTML) |
 | `/admin/editor/<target>/ops` (POST, JSON) | `{"op":"insert\|move\|delete\|duplicate","id":…,"type":…,"parentId":…,"index":…}` |

@@ -5,7 +5,7 @@ namespace Homepage.Common;
 
 /// <summary>Site-wide settings (title, tagline, home page, default group) in the settings table.</summary>
 public sealed record SiteSettings(string Title, string Tagline, int? HomePageId, int? DefaultGroupId, string BaseUrl,
-    int? HomeBlogId = null, int? LogoMediaId = null, int? FaviconMediaId = null)
+    int? HomeBlogId = null, int? LogoMediaId = null, int? FaviconMediaId = null, int? FaviconSvgMediaId = null, int? FaviconIcoMediaId = null)
 {
     public const string TitleKey = "site.title";
     public const string TaglineKey = "site.tagline";
@@ -15,7 +15,10 @@ public sealed record SiteSettings(string Title, string Tagline, int? HomePageId,
     /// <summary>When set (and no home page), the home page is this blog's post list.</summary>
     public const string HomeBlogKey = "site.homeBlogId";
     public const string LogoKey = "site.logoMediaId";
+    /// <summary>The PNG favicon (also the iOS home-screen icon). Older installs may have an ICO here.</summary>
     public const string FaviconKey = "site.faviconMediaId";
+    public const string FaviconSvgKey = "site.faviconSvgMediaId";
+    public const string FaviconIcoKey = "site.faviconIcoMediaId";
 
     public static async Task<SiteSettings> LoadAsync(AppDbContext db, CancellationToken ct = default)
     {
@@ -28,7 +31,9 @@ public sealed record SiteSettings(string Title, string Tagline, int? HomePageId,
             all.GetValueOrDefault(BaseUrlKey) ?? "",
             int.TryParse(all.GetValueOrDefault(HomeBlogKey), out var hb) ? hb : null,
             int.TryParse(all.GetValueOrDefault(LogoKey), out var lg) ? lg : null,
-            int.TryParse(all.GetValueOrDefault(FaviconKey), out var fv) ? fv : null);
+            int.TryParse(all.GetValueOrDefault(FaviconKey), out var fv) ? fv : null,
+            int.TryParse(all.GetValueOrDefault(FaviconSvgKey), out var fs) ? fs : null,
+            int.TryParse(all.GetValueOrDefault(FaviconIcoKey), out var fi) ? fi : null);
     }
 
     public static async Task SetAsync(AppDbContext db, string key, string value, CancellationToken ct = default)

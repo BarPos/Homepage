@@ -26,6 +26,7 @@ A site can have any number of blogs. Each blog lists its posts at its own addres
 | Setting | |
 |---|---|
 | Name | Shown as the blog's title and in its feed |
+| Under page | Optional: the blog lives under a page, e.g. `/docs/releases` under the page `/docs`. Its post list and posts then use that page's theme, layout, CSS and search-engine setting, unless a post sets its own. |
 | Address | The first part of the URL. Lower-case letters, digits and dashes. It cannot be a page's address or one of the site's own (`admin`, `search`, `media`, …). |
 | Description | Shown under the title and in the feed |
 | Posts per page | 1 to 50; *Load more* shows the next ones |
@@ -38,7 +39,8 @@ The **Blogs** page lists the blogs with their address and number of posts. **New
 
 ## Changing a blog's address
 
-Change **Address** and **Save**. The old address keeps working: `/old` and `/old/<post>` answer with a permanent
+Change **Address** (or **Under page**) and **Save**. Moving or renaming the page a blog is under moves the blog with
+it. In every case the old address keeps working: `/old` and `/old/<post>` answer with a permanent
 redirect (`301`) to the new address, so links and search engines follow. The blog editor lists the old addresses that
 redirect to it. If another blog later takes an old address, the redirect stops and the new blog answers there.
 

@@ -3,7 +3,7 @@
     <AccessTabs Active="@Mode" />
     <form method="get" class="toolbar">
         <label for="s" style="margin:0">@(Mode == "user-groups" ? "User" : "Role")</label>
-        <select id="s" name="id" data-autosubmit style="max-width:300px">
+        <select id="s" name="id" data-autosubmit data-search style="max-width:300px">
             @foreach (var (id, name) in Subjects) { <option value="@id" selected="@(id == SubjectId)">@name</option> }
         </select>
         <span class="muted small">Changes are saved immediately. rw implies every other permission.</span>

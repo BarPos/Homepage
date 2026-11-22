@@ -8,13 +8,13 @@
                 <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                 <h2 id="upload-title">Upload files</h2>
                 <label class="dropzone" for="f">
-                    <input id="f" type="file" name="files" multiple required accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/x-icon,.ico,application/pdf" />
-                    <span class="muted small">Images (PNG, JPEG, GIF, WebP, AVIF, ICO) or PDFs, up to 20 MiB each.</span>
+                    <input id="f" type="file" name="files" multiple required accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/x-icon,.ico,image/svg+xml,.svg,application/pdf" />
+                    <span class="muted small">Images (PNG, JPEG, GIF, WebP, AVIF, ICO, SVG) or PDFs, up to 20 MiB each (SVG: 1 MiB, checked for scripts).</span>
                 </label>
                 @if (UploadGroups.Count > 1)
                 {
                     <label for="g">Group</label>
-                    <select id="g" name="groupId">@foreach (var g in UploadGroups) { <option value="@g.Id">@g.Name</option> }</select>
+                    <select id="g" name="groupId" data-search>@foreach (var g in UploadGroups) { <option value="@g.Id">@g.Name</option> }</select>
                 }
                 else { <input type="hidden" name="groupId" value="@UploadGroups[0].Id" /> }
                 <div class="modal-actions">
@@ -25,7 +25,7 @@
         </dialog>
     }
     <ListFilters Url="Url" Placeholder="Search file names…">
-        <select name="group" aria-label="Group">
+        <select name="group" aria-label="Group" data-search>
             <option value="">All groups I can see</option>
             @foreach (var (id, name) in Groups) { <option value="@id" selected="@(id.ToString() == Url["group"])">@name</option> }
         </select>

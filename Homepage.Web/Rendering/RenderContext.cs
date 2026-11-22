@@ -12,10 +12,24 @@ public sealed class RenderContext
     public bool Edit { get; init; }
     /// <summary>Which tree is editable in the canvas ("main", "header" or "footer"); the others render inert.</summary>
     public string EditRegion { get; init; } = "main";
+    /// <summary>Which parts of the frame the page shows (its own setting; site pages are Full).</summary>
+    public Homepage.Data.PageLayout Layout { get; init; }
+    /// <summary>The page's own CSS (sanitized when rendered).</summary>
+    public string PageCss { get; init; } = "";
+    public bool NoIndex { get; init; }
+    /// <summary>Addresses of pages, posts and blogs, for links stored as references (page:12, …).</summary>
+    public Homepage.Content.SiteMap? Links { get; init; }
+
+    /// <summary>
+    /// The address for a link: references become the current address of their target. Null when the target is gone or
+    /// not published (on the public site); the editor canvas shows drafts too.
+    /// </summary>
+    public string? Href(string url) => Links is null ? url : Links.Href(url, publishedOnly: !Edit);
 
     public RenderContext ForRegion(string region) => new()
     {
         Site = Site, Theme = Theme, EditRegion = EditRegion, Edit = Edit && EditRegion == region,
+        Layout = Layout, PageCss = PageCss, NoIndex = NoIndex, Links = Links,
     };
 }
 

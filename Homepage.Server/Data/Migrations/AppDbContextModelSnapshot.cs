@@ -195,6 +195,9 @@ namespace Homepage.Server.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("ParentPageId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("PostsPerPage")
                         .HasColumnType("integer");
 
@@ -210,7 +213,12 @@ namespace Homepage.Server.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Slug")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"ParentPageId\" IS NULL");
+
+                    b.HasIndex("ParentPageId", "Slug")
+                        .IsUnique()
+                        .HasFilter("\"ParentPageId\" IS NOT NULL");
 
                     b.ToTable("blogs", (string)null);
                 });
@@ -235,6 +243,11 @@ namespace Homepage.Server.Data.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("CustomCss")
+                        .IsRequired()
+                        .HasMaxLength(100000)
+                        .HasColumnType("character varying(100000)");
+
                     b.Property<string>("DraftBlocks")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -249,6 +262,17 @@ namespace Homepage.Server.Data.Migrations
 
                     b.Property<int>("GroupId")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("InheritTheme")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int?>("Layout")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("NoIndex")
+                        .HasColumnType("boolean");
 
                     b.Property<int?>("ParentId")
                         .HasColumnType("integer");
@@ -274,6 +298,9 @@ namespace Homepage.Server.Data.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ThemeId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -297,8 +324,6 @@ namespace Homepage.Server.Data.Migrations
 
                     b.HasIndex("GroupId");
 
-                    b.HasIndex("ParentId");
-
                     b.HasIndex("SearchVector");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
@@ -306,12 +331,19 @@ namespace Homepage.Server.Data.Migrations
                     b.HasIndex("Slug")
                         .IsUnique()
                         .HasDatabaseName("IX_content_items_page_slug")
-                        .HasFilter("\"Type\" = 0");
+                        .HasFilter("\"Type\" = 0 AND \"ParentId\" IS NULL");
+
+                    b.HasIndex("ThemeId");
 
                     b.HasIndex("BlogId", "Slug")
                         .IsUnique()
                         .HasDatabaseName("IX_content_items_post_slug")
                         .HasFilter("\"Type\" = 1");
+
+                    b.HasIndex("ParentId", "Slug")
+                        .IsUnique()
+                        .HasDatabaseName("IX_content_items_subpage_slug")
+                        .HasFilter("\"Type\" = 0 AND \"ParentId\" IS NOT NULL");
 
                     b.HasIndex("Status", "PublishedAtUtc");
 
@@ -822,6 +854,14 @@ namespace Homepage.Server.Data.Migrations
                     b.ToTable("user_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("Homepage.Data.Blog", b =>
+                {
+                    b.HasOne("Homepage.Data.ContentItem", null)
+                        .WithMany()
+                        .HasForeignKey("ParentPageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Homepage.Data.ContentItem", b =>
                 {
                     b.HasOne("Homepage.Data.User", null)
@@ -843,6 +883,11 @@ namespace Homepage.Server.Data.Migrations
                     b.HasOne("Homepage.Data.ContentItem", null)
                         .WithMany()
                         .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Homepage.Data.Theme", null)
+                        .WithMany()
+                        .HasForeignKey("ThemeId")
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 

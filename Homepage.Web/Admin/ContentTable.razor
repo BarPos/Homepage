@@ -4,7 +4,7 @@
         <tbody>
             @foreach (var c in Items)
             {
-                var url = PublicContent.Url(c.Type, c.Slug, c.BlogId, BlogSlugs);
+                var url = _map?.Url(c.Type, c.Id, c.Slug, c.BlogId) ?? "";
                 <tr>
                     <td><span class="badges"><a href="/admin/editor/content-@c.Id"><strong>@c.Title</strong></a>@if (c.Id == HomePageId) { <span class="badge badge-ok" title="Shown at /">home</span> }</span>
                         <div class="muted small">@url</div></td>
@@ -32,4 +32,7 @@
     [Parameter] public IReadOnlyDictionary<int, string> BlogSlugs { get; set; } = new Dictionary<int, string>();
     [Parameter] public IReadOnlyDictionary<int, string> BlogNames { get; set; } = new Dictionary<int, string>();
     [Parameter] public int? HomePageId { get; set; }
+    [Inject] public SiteTree Tree { get; set; } = default!;
+    private SiteMap? _map;
+    protected override async Task OnInitializedAsync() => _map = await Tree.GetAsync();
 }

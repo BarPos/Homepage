@@ -8,17 +8,17 @@
     <ChildContent>
     @if (CreateGroups.Count > 0)
     {
-        <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Type="Type" Blogs="Blogs" BlogId="@(int.TryParse(Url["blog"], out var fb) ? fb : null)" />
+        <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Type="Type" Blogs="Blogs" Parents="Parents" BlogId="@(int.TryParse(Url["blog"], out var fb) ? fb : null)" />
     }
     <ListFilters Url="Url" Placeholder="Search titles and addresses…">
         <input type="hidden" name="type" value="@Type" />
-        <select name="group" aria-label="Group">
+        <select name="group" aria-label="Group" data-search>
             <option value="">All groups I can see</option>
             @foreach (var (id, name) in Groups) { <option value="@id" selected="@(id.ToString() == Url["group"])">@name</option> }
         </select>
         @if (Type == ContentType.Post && Blogs.Count > 1)
         {
-            <select name="blog" aria-label="Blog">
+            <select name="blog" aria-label="Blog" data-search>
                 <option value="">All blogs</option>
                 @foreach (var b in Blogs) { <option value="@b.Id" selected="@(b.Id.ToString() == Url["blog"])">@b.Name</option> }
             </select>
@@ -50,6 +50,7 @@
     [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
     [Parameter] public int? DefaultGroupId { get; set; }
     [Parameter] public int? HomePageId { get; set; }
+    [Parameter] public List<ContentSettingsPage.ParentChoice> Parents { get; set; } = [];
     private Dictionary<int, string> BlogSlugs => Blogs.ToDictionary(b => b.Id, b => b.Slug);
     private Dictionary<int, string> BlogNames => Blogs.ToDictionary(b => b.Id, b => b.Name);
 }

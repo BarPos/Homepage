@@ -14,7 +14,7 @@
                             <span class="badges"><a href="/admin/blogs/@b.Id"><strong>@b.Name</strong></a>@if (b.Id == HomeBlogId) { <span class="badge badge-ok" title="The home page shows this blog">home</span> }</span>
                             @if (!string.IsNullOrEmpty(b.Description)) { <div class="muted small">@b.Description</div> }
                         </td>
-                        <td><a href="/@b.Slug" target="_blank" rel="noopener"><code>/@b.Slug</code> ↗</a></td>
+                        <td><a href="@Paths.GetValueOrDefault(b.Id)" target="_blank" rel="noopener"><code>@Paths.GetValueOrDefault(b.Id)</code> ↗</a></td>
                         <td class="num"><a href="/admin/content?type=post&blog=@b.Id">@PostCounts.GetValueOrDefault(b.Id)</a></td>
                         <td class="right"><a class="btn btn-sm" href="/admin/blogs/@b.Id">Edit</a></td>
                     </tr>
@@ -28,6 +28,7 @@
     [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
     [Parameter] public Dictionary<int, int> PostCounts { get; set; } = [];
     [Parameter] public int? HomeBlogId { get; set; }
+    [Parameter] public Dictionary<int, string> Paths { get; set; } = [];
     [Parameter] public string? Message { get; set; }
     [Parameter] public string? Error { get; set; }
 }

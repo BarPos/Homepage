@@ -77,6 +77,8 @@ public static class WebExtensions
             await next();
         });
         app.UseStaticFiles();
+        // Routing after static files: the public catch-all route (/{**path}) must not claim files such as /_content/….
+        app.UseRouting();
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();

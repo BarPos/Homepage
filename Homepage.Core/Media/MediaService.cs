@@ -27,6 +27,79 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
         ("application/pdf", ".pdf", "%PDF-"u8.ToArray(), 0),
     ];
 
+    public const long MaxSvgBytes = 1024 * 1024;
+
+    /// <summary>
+    /// Whether an SVG file is safe to serve: well-formed XML (no DTD), an svg root, no scripts, event handlers,
+    /// embedded HTML or frames, and links only to parts of the same file. Null when safe, else the reason.
+    /// </summary>
+    public static string? WhyUnsafeSvg(byte[] data)
+    {
+        try
+        {
+            using var reader = System.Xml.XmlReader.Create(new MemoryStream(data), new System.Xml.XmlReaderSettings
+            {
+                // A DOCTYPE (editors write one) is skipped; entities it declares are then unknown, which fails the parse.
+                DtdProcessing = System.Xml.DtdProcessing.Ignore, XmlResolver = null, IgnoreComments = true, MaxCharactersInDocument = MaxSvgBytes * 2,
+            });
+            var root = true;
+            while (reader.Read())
+            {
+                if (reader.NodeType == System.Xml.XmlNodeType.ProcessingInstruction && reader.Name != "xml") return "processing instructions are not allowed";
+                if (reader.NodeType == System.Xml.XmlNodeType.CDATA && reader.Value.Contains("<", StringComparison.Ordinal)) return "markup in CDATA is not allowed";
+                if (reader.NodeType == System.Xml.XmlNodeType.Text && reader.Value.Contains("javascript:", StringComparison.OrdinalIgnoreCase)) return "scripts are not allowed";
+                if (reader.NodeType != System.Xml.XmlNodeType.Element) continue;
+                var name = reader.LocalName.ToLowerInvariant();
+                if (root)
+                {
+                    if (name != "svg" || reader.NamespaceURI != "http://www.w3.org/2000/svg") return "the file is not an SVG image";
+                    root = false;
+                }
+                if (name is "script" or "foreignobject" or "iframe" or "embed" or "object" or "audio" or "video" or "handler" or "listener")
+                    return $"<{reader.LocalName}> elements are not allowed";
+                // HTML and MathML could render markup; other namespaces (Inkscape, Sodipodi, RDF metadata) are inert in SVG.
+                if (reader.NamespaceURI is "http://www.w3.org/1999/xhtml" or "http://www.w3.org/1998/Math/MathML") return "HTML inside SVG is not allowed";
+                if (name is "animate" or "set" or "animatemotion" or "animatetransform"
+                    && reader.GetAttribute("attributeName") is { } animated && animated.Contains("href", StringComparison.OrdinalIgnoreCase))
+                    return "animating links is not allowed";
+                if (name == "style" && !reader.IsEmptyElement)
+                {
+                    var css = reader.ReadElementContentAsString();
+                    if (UnsafeCss(css)) return "styles may not load other files";
+                    continue;
+                }
+                for (var i = 0; i < reader.AttributeCount; i++)
+                {
+                    reader.MoveToAttribute(i);
+                    var attr = reader.LocalName.ToLowerInvariant();
+                    var value = reader.Value.Trim();
+                    if (attr.StartsWith("on", StringComparison.Ordinal)) return "event handlers are not allowed";
+                    var compact = new string(value.Where(c => !char.IsWhiteSpace(c) && !char.IsControl(c)).ToArray());
+                    if (compact.Contains("javascript:", StringComparison.OrdinalIgnoreCase) || compact.Contains("data:text/html", StringComparison.OrdinalIgnoreCase))
+                        return "scripts are not allowed";
+                    if (attr == "href" && value.Length > 0 && !value.StartsWith('#')) return "links to other files are not allowed";
+                    if ((attr == "style" || value.Contains("url(", StringComparison.OrdinalIgnoreCase)) && UnsafeCss(value)) return "styles may not load other files";
+                }
+                reader.MoveToElement();
+            }
+            return root ? "the file is not an SVG image" : null;
+        }
+        catch (System.Xml.XmlException) { return "the file is not well-formed XML"; }
+    }
+
+    private static bool UnsafeCss(string css) =>
+        css.Contains("@import", StringComparison.OrdinalIgnoreCase) || css.Contains("javascript:", StringComparison.OrdinalIgnoreCase) ||
+        System.Text.RegularExpressions.Regex.IsMatch(css, @"url\(\s*(?!['""]?\s*#)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>Text files that start with "&lt;" (after a byte-order mark and white space) may be SVG.</summary>
+    private static bool MaybeSvg(ReadOnlySpan<byte> head)
+    {
+        if (head.StartsWith(new byte[] { 0xEF, 0xBB, 0xBF })) head = head[3..];
+        var i = 0;
+        while (i < head.Length && head[i] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n') i++;
+        return i < head.Length && head[i] == (byte)'<';
+    }
+
     public static (string Type, string Ext)? Sniff(ReadOnlySpan<byte> head)
     {
         foreach (var s in Signatures)
@@ -66,8 +139,28 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
         Directory.CreateDirectory(paths.Value.MediaDirectory);
         var head = new byte[16];
         var read = await content.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, ct);
-        var sniffed = Sniff(head.AsSpan(0, read)) ?? throw new Blocks.BlockException("Only PNG, JPEG, GIF, WebP, AVIF and ICO images and PDF files can be uploaded.");
-        var stored = Guid.NewGuid().ToString("N") + sniffed.Ext;
+        var sniffed = Sniff(head.AsSpan(0, read));
+        if (sniffed is null && MaybeSvg(head.AsSpan(0, read)))
+        {
+            // SVG: read it whole (at most 1 MiB) and check it before it is stored.
+            using var all = new MemoryStream();
+            all.Write(head, 0, read);
+            var buf = new byte[81920];
+            int got;
+            while ((got = await content.ReadAsync(buf, ct)) > 0)
+            {
+                all.Write(buf, 0, got);
+                if (all.Length > MaxSvgBytes) throw new Blocks.BlockException("SVG files can be at most 1 MiB.");
+            }
+            var bytes = all.ToArray();
+            if (WhyUnsafeSvg(bytes) is { } why) throw new Blocks.BlockException($"This SVG cannot be used: {why}.");
+            head = bytes;
+            read = bytes.Length;
+            content = Stream.Null;
+            sniffed = ("image/svg+xml", ".svg");
+        }
+        if (sniffed is null) throw new Blocks.BlockException("Only PNG, JPEG, GIF, WebP, AVIF, ICO and SVG images and PDF files can be uploaded.");
+        var stored = Guid.NewGuid().ToString("N") + sniffed.Value.Ext;
         var path = Path.Combine(paths.Value.MediaDirectory, stored);
         long size = read;
         await using (var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true))
@@ -92,7 +185,7 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var item = new MediaItem
         {
-            GroupId = groupId, FileName = safeName, StoredName = stored, ContentType = sniffed.Type, Size = size,
+            GroupId = groupId, FileName = safeName, StoredName = stored, ContentType = sniffed.Value.Type, Size = size,
             UploadedById = p.UserId == 0 ? null : p.UserId, CreatedAtUtc = time.GetUtcNow().UtcDateTime,
         };
         db.Media.Add(item);
@@ -126,7 +219,8 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
             """).SingleAsync(ct);
         if (used > 0) return true;
         var key = id.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (await db.Settings.AnyAsync(s => (s.Key == SiteSettings.LogoKey || s.Key == SiteSettings.FaviconKey) && s.Value == key, ct)) return true;
+        if (await db.Settings.AnyAsync(s => (s.Key == SiteSettings.LogoKey || s.Key == SiteSettings.FaviconKey || s.Key == SiteSettings.FaviconSvgKey
+                                             || s.Key == SiteSettings.FaviconIcoKey) && s.Value == key, ct)) return true;
         return await db.Database.SqlQuery<int>($"""
             SELECT count(*)::int AS "Value" FROM themes
             WHERE jsonb_path_exists("HeaderBlocks", '$.** ? (@.mediaId == $id)', jsonb_build_object('id', {id}))

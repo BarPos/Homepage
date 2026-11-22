@@ -131,7 +131,7 @@ public static class AdminEndpoints
         });
 
         admin.MapGet("", async (HttpContext http, ContentService content, ThemeService themes, BlogService blogs, IDbContextFactory<AppDbContext> dbf,
-            Homepage.Analytics.AnalyticsQueries analytics, Homepage.Analytics.AnalyticsCollector collector, TimeProvider time) =>
+            Homepage.Analytics.AnalyticsQueries analytics, Homepage.Analytics.AnalyticsCollector collector, TimeProvider time, SiteTree tree) =>
         {
             var a = AdminContext.Get(http);
             long? visitorsToday = null;
@@ -149,6 +149,7 @@ public static class AdminEndpoints
             return Html.Render<DashboardPage>(new
             {
                 Pages = pages, Posts = posts, Drafts = drafts, VisitorsToday = visitorsToday,
+                Parents = await ParentChoicesAsync(a.Perms, db, await tree.GetAsync()),
                 ThemeName = (await themes.GetActiveAsync()).Name,
                 Recent = recent.Items,
                 GroupNames = groups.Where(g => a.Perms.Has(g.Id, Perm.Ro)).ToDictionary(g => g.Id, g => g.Name),
@@ -160,7 +161,7 @@ public static class AdminEndpoints
         });
 
         // ---------------------------------------------------------------- content
-        admin.MapGet("/content", async (HttpContext http, HttpRequest req, ContentService content, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
+        admin.MapGet("/content", async (HttpContext http, HttpRequest req, ContentService content, BlogService blogs, IDbContextFactory<AppDbContext> dbf, SiteTree tree) =>
         {
             var a = AdminContext.Get(http);
             var url = ListUrl.From(req, "type", "q", "group", "blog", "status", "sort", "size", "page");
@@ -174,6 +175,7 @@ public static class AdminEndpoints
             return Html.Render<ContentListPage>(new
             {
                 Type = t, Result = result, Url = url,
+                Parents = await ParentChoicesAsync(a.Perms, db, await tree.GetAsync()),
                 Groups = groups.Where(x => visible.Contains(x.Id) && !x.IsSystem).ToDictionary(x => x.Id, x => x.Name),
                 CreateGroups = CreatableGroups(a.Perms, groups),
                 Blogs = await blogs.AllAsync(),
@@ -183,32 +185,55 @@ public static class AdminEndpoints
         });
 
         admin.MapPost("/content/new", async (HttpContext http, ContentService content,
-            [FromForm] string title, [FromForm] string type, [FromForm] int groupId, [FromForm] int? blogId) =>
+            [FromForm] string title, [FromForm] string type, [FromForm] int groupId, [FromForm] string? blogId, [FromForm] string? parentId) =>
         {
             var a = AdminContext.Get(http);
             var t = Enum.TryParse<ContentType>(type, ignoreCase: true, out var parsed) ? parsed : throw new BlockException("Unknown content type.");
-            var item = await content.CreateAsync(a.Perms, t, title, groupId, a.Actor, t == ContentType.Post ? blogId : null);
+            var item = await content.CreateAsync(a.Perms, t, title, groupId, a.Actor, t == ContentType.Post ? Int(blogId) : null,
+                parentId: t == ContentType.Page && Int(parentId) is > 0 and var pid ? pid : (int?)null);
             return Results.Redirect($"/admin/editor/content-{item.Id}");
         });
 
-        admin.MapGet("/content/{id:int}", async (int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf, BlogService blogs) =>
-            await ContentSettings(id, http, content, dbf, blogs, null));
+        admin.MapGet("/content/{id:int}", async (int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf, BlogService blogs,
+            SiteTree tree) => await ContentSettings(id, http, content, dbf, blogs, tree, null));
 
         admin.MapPost("/content/{id:int}", async (int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf,
-            IOutputCacheStore cache, BlogService blogs, [FromForm] string title, [FromForm] string slug, [FromForm] string? excerpt, [FromForm] int groupId,
-            [FromForm] int? blogId) =>
+            IOutputCacheStore cache, BlogService blogs, SiteTree tree, [FromForm] string title, [FromForm] string slug, [FromForm] string? excerpt, [FromForm] int groupId,
+            [FromForm] int? blogId, [FromForm] int? parentId) =>
         {
             var a = AdminContext.Get(http);
             try
             {
-                var r = await content.UpdateSettingsAsync(a.Perms, id, title, slug, excerpt ?? "", groupId, a.Actor, blogId);
+                var r = await content.UpdateSettingsAsync(a.Perms, id, title, slug, excerpt ?? "", groupId, a.Actor, blogId, parentId: parentId ?? 0);
                 if (r.AffectsSite) await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             }
             catch (Exception ex) when (ex is BlockException or ConflictException)
             {
-                return await ContentSettings(id, http, content, dbf, blogs, ex.Message);
+                return await ContentSettings(id, http, content, dbf, blogs, tree, ex.Message);
             }
             return Results.Redirect($"/admin/content/{id}");
+        });
+
+        admin.MapPost("/content/{id:int}/options", async (int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf,
+            IOutputCacheStore cache, BlogService blogs, SiteTree tree, [FromForm] string? theme, [FromForm] string? layout, [FromForm] string? noIndex,
+            [FromForm] string? customCss) =>
+        {
+            var a = AdminContext.Get(http);
+            // "inherit" = like the page above; theme "site" = the site's theme; otherwise a theme id.
+            var inheritTheme = theme is null or "inherit";
+            int? themeId = inheritTheme || theme == "site" ? null : Int(theme) ?? throw new BlockException("Unknown theme.");
+            PageLayout? lay = Enum.TryParse<PageLayout>(layout, out var l) ? l : null;
+            bool? index = noIndex switch { "true" => true, "false" => false, _ => null };
+            try
+            {
+                var r = await content.UpdateOptionsAsync(a.Perms, id, inheritTheme, themeId, lay, customCss ?? "", index, a.Actor);
+                if (r.AffectsSite) await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+            }
+            catch (Exception ex) when (ex is BlockException or ConflictException)
+            {
+                return await ContentSettings(id, http, content, dbf, blogs, tree, ex.Message);
+            }
+            return FlashCookie.Redirect(http, $"/admin/content/{id}", "Saved.");
         });
 
         admin.MapPost("/content/{id:int}/publish", async (int id, HttpContext http, ContentService content, IOutputCacheStore cache) =>
@@ -274,7 +299,13 @@ public static class AdminEndpoints
                 await using var db = await dbf.CreateDbContextAsync();
                 theme = ThemeService.ToActiveDraft(await db.Themes.AsNoTracking().FirstAsync(t => t.Id == doc.ThemeId));
             }
-            var ctx = await ctxf.CreateAsync(edit: doc.CanEdit || true, region: region, theme: theme);
+            RenderContext ctx;
+            if (doc.Target.IsTheme) ctx = await ctxf.CreateAsync(edit: true, region: region, theme: theme);
+            else
+            {
+                await using var db = await dbf.CreateDbContextAsync();
+                ctx = await ctxf.CreateForItemAsync(await db.ContentItems.AsNoTracking().FirstAsync(c => c.Id == doc.Target.Id), edit: true, region: region);
+            }
             return Html.Render<CanvasPage>(new { Ctx = ctx, Main = doc.Target.IsTheme ? new BlockTree() : doc.Tree, Title = doc.Title, IsPost = doc.Kind == TreeKind.Post });
         });
 
@@ -290,7 +321,14 @@ public static class AdminEndpoints
                 await using var db = await dbf.CreateDbContextAsync();
                 theme = ThemeService.ToActiveDraft(await db.Themes.AsNoTracking().FirstAsync(t => t.Id == doc.ThemeId));
             }
-            var ctx = (await ctxf.CreateAsync(edit: true, region: region, theme: theme)).ForRegion(region);
+            RenderContext ctx;
+            if (doc.Target.IsTheme) ctx = await ctxf.CreateAsync(edit: true, region: region, theme: theme);
+            else
+            {
+                await using var db = await dbf.CreateDbContextAsync();
+                ctx = await ctxf.CreateForItemAsync(await db.ContentItems.AsNoTracking().FirstAsync(c => c.Id == doc.Target.Id), edit: true, region: region);
+            }
+            ctx = ctx.ForRegion(region);
             return Html.Render<CanvasRegion>(new { Ctx = ctx, Tree = doc.Tree, Contain = doc.Kind == TreeKind.Page });
         });
 
@@ -445,7 +483,8 @@ public static class AdminEndpoints
         {
             var a = AdminContext.Get(http);
             var live = await themes.PublishAsync(a.Perms, id, a.Actor);
-            if (live) await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+            // Also when the theme is not active: pages can use it as their own theme (and link its CSS by version).
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             if (http.Request.Headers.ContainsKey("HX-Request"))
             {
                 Flash.Ok(http.Response, live ? "Published. The site uses the new version." : "Published.");
@@ -501,7 +540,10 @@ public static class AdminEndpoints
         {
             var labels = form["label"];
             var urls = form["url"];
-            return labels.Select((l, i) => new MenuLink(l ?? "", i < urls.Count ? urls[i] ?? "" : "")).ToList();
+            var icons = form["icon"];
+            var tabs = form["newTab"];
+            return labels.Select((l, i) => new MenuLink(l ?? "", i < urls.Count ? urls[i] ?? "" : "",
+                i < icons.Count && !string.IsNullOrWhiteSpace(icons[i]) ? icons[i] : null, i < tabs.Count && tabs[i] == "true")).ToList();
         }
 
         admin.MapGet("/menus", async (HttpContext http, MenuService menus) =>
@@ -578,8 +620,9 @@ public static class AdminEndpoints
                 .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
         }
         static async Task<IResult> BlogEditor(HttpContext http, BlogService blogs, AppDbContext db, Blog? blog, string? message, string? error,
-            string? name = null, string? slug = null, string? description = null, int? postsPerPage = null)
+            string? name = null, string? slug = null, string? description = null, int? postsPerPage = null, int? parentPageId = null, bool keepParent = true)
         {
+            var map = await http.RequestServices.GetRequiredService<SiteTree>().GetAsync();
             var all = await blogs.AllAsync();
             // Deleting needs no posts at all (not just none visible to this user); the service checks again.
             var count = blog is null ? 0 : await db.ContentItems.CountAsync(c => c.BlogId == blog.Id);
@@ -588,6 +631,9 @@ public static class AdminEndpoints
                 Blog = blog,
                 Name = name ?? blog?.Name ?? "", Slug = slug ?? blog?.Slug ?? "", Description = description ?? blog?.Description ?? "",
                 PostsPerPage = postsPerPage ?? blog?.PostsPerPage ?? 10,
+                ParentPageId = keepParent ? blog?.ParentPageId : parentPageId,
+                Parents = await ParentChoicesAsync(AdminContext.Get(http).Perms, db, map, keep: keepParent ? blog?.ParentPageId : parentPageId),
+                CurrentPath = blog is null ? "/" : map.BlogPath(blog.Id),
                 PostCount = blog is null ? 0 : (await PostCounts(http, db)).GetValueOrDefault(blog.Id),
                 CanDelete = blog is not null && count == 0 && all.Count > 1,
                 HomeBlogId = (await SiteSettings.LoadAsync(db)).HomeBlogId,
@@ -600,7 +646,10 @@ public static class AdminEndpoints
             RequireLayout(http, "Blogs");
             var (message, error) = FlashCookie.Take(http);
             await using var db = await dbf.CreateDbContextAsync();
-            return Html.Render<BlogsPage>(new { Blogs = await blogs.AllAsync(), PostCounts = await PostCounts(http, db), HomeBlogId = (await SiteSettings.LoadAsync(db)).HomeBlogId, Message = message, Error = error });
+            var map = await http.RequestServices.GetRequiredService<SiteTree>().GetAsync();
+            var all = await blogs.AllAsync();
+            return Html.Render<BlogsPage>(new { Blogs = all, PostCounts = await PostCounts(http, db), HomeBlogId = (await SiteSettings.LoadAsync(db)).HomeBlogId,
+                Paths = all.ToDictionary(b => b.Id, b => map.BlogPath(b.Id)), Message = message, Error = error });
         });
 
         admin.MapGet("/blogs/new", async (HttpContext http, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
@@ -620,16 +669,18 @@ public static class AdminEndpoints
         });
 
         admin.MapPost("/blogs", async (HttpContext http, BlogService blogs, IOutputCacheStore cache, IDbContextFactory<AppDbContext> dbf,
-            [FromForm] int? id, [FromForm] string name, [FromForm] string slug, [FromForm] string? description, [FromForm] int? postsPerPage) =>
+            [FromForm] int? id, [FromForm] string name, [FromForm] string slug, [FromForm] string? description, [FromForm] int? postsPerPage,
+            [FromForm] string? parentPageId) =>
         {
             var a = AdminContext.Get(http);
             Blog saved;
-            try { saved = await blogs.SaveAsync(a.Perms, id, name, slug, description ?? "", postsPerPage ?? 10, a.Actor); }
+            int? parent = Int(parentPageId) is > 0 and var pp ? pp : null;
+            try { saved = await blogs.SaveAsync(a.Perms, id, name, slug, description ?? "", postsPerPage ?? 10, a.Actor, parentPageId: parent); }
             catch (Exception ex) when (ex is BlockException or ConflictException)
             {
                 await using var db = await dbf.CreateDbContextAsync();
                 var blog = id is { } bid ? await blogs.ByIdAsync(bid) ?? throw new NotFoundException() : null;
-                return await BlogEditor(http, blogs, db, blog, null, ex.Message, name, slug, description, postsPerPage);
+                return await BlogEditor(http, blogs, db, blog, null, ex.Message, name, slug, description, postsPerPage, parent, keepParent: false);
             }
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             return FlashCookie.Redirect(http, $"/admin/blogs/{saved.Id}", id is null ? "Blog created. Pick it when you write a post." : "Saved.");
@@ -645,6 +696,61 @@ public static class AdminEndpoints
         });
 
         MapAnalytics(admin);
+
+        // Link chooser: pages, blogs and posts the user can see, with their addresses.
+        admin.MapGet("/editor/links", async (string? q, HttpContext http, IDbContextFactory<AppDbContext> dbf, BlogService blogs, SiteTree tree) =>
+        {
+            var perms = AdminContext.Get(http).Perms;
+            var visible = perms.GroupsWith(Perm.Ro);
+            var map = await tree.GetAsync();
+            var query = (q ?? "").Trim();
+            await using var db = await dbf.CreateDbContextAsync();
+            var items = db.ContentItems.AsNoTracking().Where(c => visible.Contains(c.GroupId));
+            if (query.Length > 0)
+            {
+                var like = Paging.Like(query);
+                items = items.Where(c => EF.Functions.ILike(c.Title, like) || EF.Functions.ILike(c.Slug, like));
+            }
+            var rows = await items.OrderByDescending(c => c.Status).ThenBy(c => c.Title).Take(80)
+                .Select(c => new { c.Id, c.Type, c.Title, c.Slug, c.BlogId, c.Status }).ToListAsync();
+            var blogList = (await blogs.AllAsync()).Where(b => query.Length == 0 || b.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || map.BlogPath(b.Id).Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+            var sb = new System.Text.StringBuilder();
+            void Group(string title) => sb.Append("<div class=\"link-group\">").Append(title).Append("</div>");
+            // The value is a reference (page:12, …) so the link follows renames and moves; the address is shown.
+            void Choice(string reference, string url, string title, string? badge)
+            {
+                var u = System.Net.WebUtility.HtmlEncode(url);
+                var label = System.Net.WebUtility.HtmlEncode($"{title} · {url}");
+                sb.Append("<button type=\"button\" class=\"link-choice\" role=\"option\" data-link-value=\"").Append(reference)
+                  .Append("\" data-link-label=\"").Append(label).Append("\" data-link-title=\"").Append(System.Net.WebUtility.HtmlEncode(title)).Append("\"><strong>")
+                  .Append(System.Net.WebUtility.HtmlEncode(title)).Append("</strong><code>").Append(u).Append("</code>");
+                if (badge is not null) sb.Append("<span class=\"badge\">").Append(badge).Append("</span>");
+                sb.Append("</button>");
+            }
+            var pages = rows.Where(r => r.Type == ContentType.Page).OrderBy(r => map.PagePath(r.Id), StringComparer.Ordinal).ToList();
+            if (pages.Count > 0) { Group("Pages"); foreach (var r in pages) Choice($"page:{r.Id}", map.PagePath(r.Id), r.Title, r.Status == ContentStatus.Published ? null : "draft"); }
+            if (blogList.Count > 0) { Group("Blogs"); foreach (var b in blogList) Choice($"blog:{b.Id}", map.BlogPath(b.Id), b.Name, null); }
+            var posts = rows.Where(r => r.Type == ContentType.Post).ToList();
+            if (posts.Count > 0) { Group("Posts"); foreach (var r in posts) Choice($"post:{r.Id}", map.Url(r.Type, r.Id, r.Slug, r.BlogId), r.Title, r.Status == ContentStatus.Published ? null : "draft"); }
+            if (sb.Length == 0) sb.Append("<p class=\"muted\">Nothing matches. For another site, type the address in the field.</p>");
+            return Results.Content(sb.ToString(), "text/html; charset=utf-8");
+        });
+
+        // Icon search for the icon picker in the inspector (any signed-in user: the icon set is public).
+        admin.MapGet("/editor/icons", (string? q) =>
+        {
+            var sb = new System.Text.StringBuilder();
+            var found = Icons.Search(q, 120);
+            foreach (var icon in found)
+            {
+                var label = System.Net.WebUtility.HtmlEncode(icon.Key.Replace(':', ' '));
+                sb.Append("<button type=\"button\" class=\"icon-choice\" role=\"option\" data-icon-value=\"").Append(System.Net.WebUtility.HtmlEncode(icon.Key))
+                  .Append("\" title=\"").Append(label).Append("\" aria-label=\"").Append(label).Append("\">").Append(Icons.Svg(icon)).Append("</button>");
+            }
+            if (found.Count == 0) sb.Append("<p class=\"muted\">No icons match.</p>");
+            return Results.Content(sb.ToString(), "text/html; charset=utf-8");
+        });
         MapProfile(admin);
         MapAccess(admin);
         MapSettings(admin);
@@ -1144,7 +1250,7 @@ public static class AdminEndpoints
 
         admin.MapPost("/settings", async (HttpContext http, IDbContextFactory<AppDbContext> dbf, IOutputCacheStore cache, IAuditLog audit,
             [FromForm] string title, [FromForm] string? tagline, [FromForm] string? baseUrl, [FromForm] string? home, [FromForm] string? defaultGroupId,
-            [FromForm] string? logoMediaId, [FromForm] string? faviconMediaId) =>
+            [FromForm] string? logoMediaId, [FromForm] string? faviconMediaId, [FromForm] string? faviconSvgMediaId, [FromForm] string? faviconIcoMediaId) =>
         {
             var a = AdminContext.Get(http);
             if (!a.Perms.IsAdmin) throw new AccessDeniedException("This needs admin: rw.");
@@ -1159,10 +1265,15 @@ public static class AdminEndpoints
             var (homeKind, homeId) = home?.Split(':') is [var k, var v] && int.TryParse(v, out var hid) ? (k, hid) : ("", 0);
             await SiteSettings.SetAsync(db, SiteSettings.HomePageKey, homeKind == "page" ? homeId.ToString() : "");
             await SiteSettings.SetAsync(db, SiteSettings.HomeBlogKey, homeKind == "blog" ? homeId.ToString() : "");
-            foreach (var (key, value) in new[] { (SiteSettings.LogoKey, logoMediaId), (SiteSettings.FaviconKey, faviconMediaId) })
+            foreach (var (key, value, types) in new (string, string?, string[]?)[]
+                     {
+                         (SiteSettings.LogoKey, logoMediaId, null), (SiteSettings.FaviconKey, faviconMediaId, ["image/png", "image/x-icon"]),
+                         (SiteSettings.FaviconSvgKey, faviconSvgMediaId, ["image/svg+xml"]), (SiteSettings.FaviconIcoKey, faviconIcoMediaId, ["image/x-icon"]),
+                     })
             {
                 int? mid = int.TryParse(value, out var m) ? m : null;
-                if (mid is { } id && !await db.Media.AnyAsync(x => x.Id == id && x.ContentType.StartsWith("image/"))) throw new BlockException("Choose an image from Media.");
+                if (mid is { } id && !await db.Media.AnyAsync(x => x.Id == id && x.ContentType.StartsWith("image/") && (types == null || types.Contains(x.ContentType))))
+                    throw new BlockException("Choose an image of the right format from Media.");
                 await SiteSettings.SetAsync(db, key, mid?.ToString() ?? "");
             }
             if (int.TryParse(defaultGroupId, out var g)) await SiteSettings.SetAsync(db, SiteSettings.DefaultGroupKey, g.ToString());
@@ -1230,16 +1341,47 @@ public static class AdminEndpoints
     }
 
     // ---------------------------------------------------------------- helpers
+    /// <summary>Pages the user can see, as possible parents (with their addresses), leaving out <paramref name="exclude"/>.</summary>
+    /// <param name="keep">The current parent: always listed, also when the user cannot see it, so saving never moves the item.</param>
+    private static async Task<List<ContentSettingsPage.ParentChoice>> ParentChoicesAsync(EffectivePermissions perms, AppDbContext db, SiteMap map,
+        ISet<int>? exclude = null, int? keep = null)
+    {
+        var visible = perms.GroupsWith(Perm.Ro);
+        var pages = await db.ContentItems.AsNoTracking().Where(c => c.Type == ContentType.Page && visible.Contains(c.GroupId))
+            .Select(c => new { c.Id, c.Title }).ToListAsync();
+        var list = pages.Where(p => exclude is null || !exclude.Contains(p.Id))
+            .Select(p => new ContentSettingsPage.ParentChoice(p.Id, map.PagePath(p.Id), p.Title))
+            .Where(p => p.Path.Count(c => c == '/') < SiteTree.MaxDepth || p.Id == keep)
+            .ToList();
+        if (keep is { } k && list.All(p => p.Id != k)) list.Add(new ContentSettingsPage.ParentChoice(k, map.PagePath(k), "(a page you cannot see)"));
+        return list.OrderBy(p => p.Path, StringComparer.Ordinal).ToList();
+    }
+
     private static async Task<IResult> ContentSettings(int id, HttpContext http, ContentService content, IDbContextFactory<AppDbContext> dbf,
-        BlogService blogs, string? error)
+        BlogService blogs, SiteTree tree, string? error)
     {
         var a = AdminContext.Get(http);
         var item = await content.GetForViewAsync(a.Perms, id);
         var facts = ContentService.Facts(item);
         await using var db = await dbf.CreateDbContextAsync();
         var groups = await db.Groups.AsNoTracking().Where(g => g.Valid && !g.IsSystem).OrderBy(g => g.Name).ToListAsync();
+        var map = await tree.GetAsync();
+        var themesList = await db.Themes.AsNoTracking().OrderBy(t => t.Name).ToListAsync();
+        var allBlogs = await blogs.AllAsync();
+        var (flashMessage, flashError) = FlashCookie.Take(http);
+        error ??= flashError;
         return Html.Render<ContentSettingsPage>(new
         {
+            Parents = item.Type == ContentType.Page ? await ParentChoicesAsync(a.Perms, db, map, map.PageAndDescendants(id), item.ParentId) : [],
+            Themes = themesList,
+            ActiveThemeName = themesList.FirstOrDefault(t => t.IsActive)?.Name ?? "",
+            CanEditCss = a.Perms.HasSystem(SystemGroups.Themes, Perm.Rw),
+            PublicUrl = map.Url(item.Type, item.Id, item.Slug, item.BlogId),
+            Inherited = map.Effective(map.InheritsFrom(item.Type, item.ParentId, item.BlogId)),
+            Effective = map.EffectiveFor(item.Type, item.ParentId, item.BlogId, PageOptionValues.Of(item)),
+            HasParent = map.InheritsFrom(item.Type, item.ParentId, item.BlogId) is not null,
+            BlogPaths = allBlogs.ToDictionary(b => b.Id, b => map.BlogPath(b.Id)),
+            Message = error is null ? flashMessage : null,
             Item = item,
             MoveTargets = groups.Where(g => g.Id == item.GroupId || ContentRules.CanMove(a.Perms, facts, g.Id)).ToList(),
             Revisions = await db.Revisions.AsNoTracking().Where(r => r.ContentItemId == id).OrderByDescending(r => r.Id).Take(20).ToListAsync(),

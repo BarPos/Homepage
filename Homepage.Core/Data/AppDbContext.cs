@@ -86,7 +86,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.Property(c => c.Blocks).HasColumnType("jsonb");
             e.Property(c => c.DraftBlocks).HasColumnType("jsonb");
             // Page addresses are unique among pages; post addresses only within their blog.
-            e.HasIndex(c => c.Slug).IsUnique().HasFilter("\"Type\" = 0").HasDatabaseName("IX_content_items_page_slug");
+            // Page addresses are unique among siblings: top-level pages by slug, subpages by parent and slug.
+            e.HasIndex(c => c.Slug).IsUnique().HasFilter("\"Type\" = 0 AND \"ParentId\" IS NULL").HasDatabaseName("IX_content_items_page_slug");
+            e.HasIndex(c => new { c.ParentId, c.Slug }).IsUnique().HasFilter("\"Type\" = 0 AND \"ParentId\" IS NOT NULL").HasDatabaseName("IX_content_items_subpage_slug");
             e.HasIndex(c => new { c.BlogId, c.Slug }).IsUnique().HasFilter("\"Type\" = 1").HasDatabaseName("IX_content_items_post_slug");
             e.HasOne<Blog>().WithMany().HasForeignKey(c => c.BlogId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(c => new { c.Status, c.PublishedAtUtc });
@@ -94,6 +96,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.HasOne<Group>().WithMany().HasForeignKey(c => c.GroupId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<ContentItem>().WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne<User>().WithMany().HasForeignKey(c => c.AuthorId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<Theme>().WithMany().HasForeignKey(c => c.ThemeId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(c => c.CustomCss).HasMaxLength(100_000);
+            e.Property(c => c.InheritTheme).HasDefaultValue(true);
             e.HasGeneratedTsVectorColumn(c => c.SearchVector!, "simple", c => new { c.Title, c.SearchText })
                 .HasIndex(c => c.SearchVector).HasMethod("GIN");
             e.Property(c => c.Version).IsRowVersion();
@@ -104,7 +109,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.Slug).HasMaxLength(80);
             e.Property(x => x.Description).HasMaxLength(500);
-            e.HasIndex(x => x.Slug).IsUnique();
+            e.HasIndex(x => x.Slug).IsUnique().HasFilter("\"ParentPageId\" IS NULL");
+            e.HasIndex(x => new { x.ParentPageId, x.Slug }).IsUnique().HasFilter("\"ParentPageId\" IS NOT NULL");
+            e.HasOne<ContentItem>().WithMany().HasForeignKey(x => x.ParentPageId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<Revision>(e =>
         {

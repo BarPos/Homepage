@@ -31,6 +31,18 @@ public sealed class ThemeService(IDbContextFactory<AppDbContext> dbFactory, IMem
         return active;
     }
 
+    /// <summary>A theme by id as it is published (for pages with their own theme); null when it does not exist. Cached briefly.</summary>
+    public async Task<ActiveTheme?> GetPublishedAsync(int id, CancellationToken ct = default)
+    {
+        var key = "theme:published:" + id;
+        if (cache.TryGetValue(key, out ActiveTheme? cached)) return cached;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var t = await db.Themes.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        var theme = t is null ? null : ToActive(t);
+        cache.Set(key, theme, TimeSpan.FromSeconds(30));
+        return theme;
+    }
+
     /// <summary>The theme as it will look after publishing: drafts where there are drafts.</summary>
     public static ActiveTheme ToActiveDraft(Theme t) => ToActive(new Theme
     {
@@ -155,6 +167,7 @@ public sealed class ThemeService(IDbContextFactory<AppDbContext> dbFactory, IMem
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateConcurrencyException) { throw new ConflictException("Someone else changed this theme. Reload and try again."); }
         if (t.IsActive) Invalidate();
+        cache.Remove("theme:published:" + id); // pages with this as their own theme
         await audit.WriteAsync(actor, "theme.publish", "Theme", id.ToString(), $"{t.Name}: {string.Join(", ", parts)} (v{t.ThemeVersion})", ct: ct);
         return t.IsActive;
     }

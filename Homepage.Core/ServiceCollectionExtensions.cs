@@ -58,6 +58,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ThemeService>();
         services.AddSingleton<MenuService>();
         services.AddSingleton<BlogService>();
+        services.AddSingleton<SiteTree>();
         services.AddSingleton<MediaService>();
         services.AddSingleton<PermissionAdminService>();
         services.AddScoped<AccountService>();

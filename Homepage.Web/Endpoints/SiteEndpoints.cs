@@ -32,43 +32,43 @@ public static class SiteEndpoints
     {
         var site = app.MapGroup("").CacheOutput(CachePolicy);
 
-        site.MapGet("/", async (int? skip, HttpRequest req, RenderContextFactory ctxf, PublicContent content, BlogService blogs, CancellationToken ct) =>
-        {
-            var ctx = await ctxf.CreateAsync(ct: ct);
-            if (ctx.Site.HomePageId is { } id && await content.GetPublishedByIdAsync(id, ct) is { Type: ContentType.Page } home)
-                return (IResult)Html.Render<PageView>(new { Ctx = ctx, Item = home, Tree = BlockTree.Parse(home.Blocks), IsHome = true });
-            var blog = (ctx.Site.HomeBlogId is { } bid ? await blogs.ByIdAsync(bid, ct) : null) ?? (await blogs.AllAsync(ct)).FirstOrDefault();
-            if (blog is null) return Html.Render<MessagePage>(new { Ctx = ctx, Heading = "Nothing here yet", Text = "Sign in at /admin to add a page." });
-            return await BlogPage(blog, "/", skip, req, ctx, content, ct);
-        });
-
-        // /{slug}: a page, a blog's post list, or an old blog address (301 to the new one).
-        site.MapGet("/{slug}", async (string slug, int? skip, HttpRequest req, RenderContextFactory ctxf, PublicContent content, BlogService blogs,
+        site.MapGet("/", async (int? skip, HttpRequest req, RenderContextFactory ctxf, PublicContent content, BlogService blogs, SiteTree tree,
             CancellationToken ct) =>
         {
             var ctx = await ctxf.CreateAsync(ct: ct);
-            if (await content.GetPublishedPageAsync(slug, ct) is { } page)
-                return (IResult)Html.Render<PageView>(new { Ctx = ctx, Item = page, Tree = BlockTree.Parse(page.Blocks), IsHome = page.Id == ctx.Site.HomePageId });
-            if (await blogs.BySlugAsync(slug, ct) is { } blog) return await BlogPage(blog, "/" + blog.Slug, skip, req, ctx, content, ct);
-            if (await blogs.ByPreviousSlugAsync(slug, ct) is { } moved) return Results.Redirect("/" + moved.Slug + req.QueryString, permanent: true);
-            return Html.Render<MessagePage>(new { Ctx = ctx }, 404);
+            if (ctx.Site.HomePageId is { } id && await content.GetPublishedByIdAsync(id, ct) is { Type: ContentType.Page } home)
+                return (IResult)Html.Render<PageView>(new { Ctx = await ctxf.CreateForItemAsync(home, ct: ct), Item = home, Tree = BlockTree.Parse(home.Blocks), IsHome = true });
+            var blog = (ctx.Site.HomeBlogId is { } bid ? await blogs.ByIdAsync(bid, ct) : null) ?? (await blogs.AllAsync(ct)).FirstOrDefault();
+            if (blog is null) return Html.Render<MessagePage>(new { Ctx = ctx, Heading = "Nothing here yet", Text = "Sign in at /admin to add a page." });
+            return await BlogPage(blog, "/", (await tree.GetAsync(ct)).BlogPath(blog.Id), skip, req, await ctxf.CreateForBlogAsync(blog.Id, ct), content, ct);
         });
 
-        // /{blog}/{post} and /{blog}/feed.xml (post addresses never contain a dot).
-        site.MapGet("/{blogSlug}/{slug}", async (string blogSlug, string slug, HttpRequest req, RenderContextFactory ctxf, PublicContent content,
-            BlogService blogs, CancellationToken ct) =>
+        // Everything else: pages (/about, /about/team), blogs (/blog, /docs/releases), posts (…/{post}), feeds (…/feed.xml),
+        // and old blog addresses (301 to the new one). Literal routes (search, feeds, media, …) take precedence.
+        site.MapGet("/{**path}", async (string path, int? skip, HttpRequest req, RenderContextFactory ctxf, PublicContent content, BlogService blogs,
+            SiteTree tree, CancellationToken ct) =>
         {
-            var blog = await blogs.BySlugAsync(blogSlug, ct);
-            if (blog is null && await blogs.ByPreviousSlugAsync(blogSlug, ct) is { } moved)
-                return Results.Redirect($"/{moved.Slug}/{slug}{req.QueryString}", permanent: true);
-            var ctx = await ctxf.CreateAsync(ct: ct);
-            if (blog is null) return (IResult)Html.Render<MessagePage>(new { Ctx = ctx }, 404);
-            if (slug == "feed.xml") return Feed(ctx, req, blog.Name, blog.Description, $"/{blog.Slug}", await content.LatestPostsAsync(20, 0, blog.Id, ct));
-            var post = await content.GetPublishedPostAsync(blog.Id, slug, ct);
-            return post is null
-                ? Html.Render<MessagePage>(new { Ctx = ctx }, 404)
-                : Html.Render<PostView>(new { Ctx = ctx, Item = post, Tree = BlockTree.Parse(post.Blocks), Blog = blog,
-                    Author = (await content.AuthorNamesAsync([post.AuthorId], ct)).GetValueOrDefault(post.AuthorId ?? 0) });
+            var map = await tree.GetAsync(ct);
+            switch (map.Resolve(path))
+            {
+                case SitePath.Page(var id) when await content.GetPublishedByIdAsync(id, ct) is { Type: ContentType.Page } page:
+                {
+                    var ctx = await ctxf.CreateForItemAsync(page, ct: ct);
+                    return (IResult)Html.Render<PageView>(new { Ctx = ctx, Item = page, Tree = BlockTree.Parse(page.Blocks), IsHome = page.Id == ctx.Site.HomePageId, Path = map.PagePath(page.Id) });
+                }
+                case SitePath.BlogIndex(var blogId, var blogPath) when await blogs.ByIdAsync(blogId, ct) is { } blog:
+                    return await BlogPage(blog, blogPath, blogPath, skip, req, await ctxf.CreateForBlogAsync(blog.Id, ct), content, ct);
+                case SitePath.Feed(var blogId, var blogPath) when await blogs.ByIdAsync(blogId, ct) is { } blog:
+                    return Feed(await ctxf.CreateAsync(ct: ct), req, blog.Name, blog.Description, blogPath, await content.LatestPostsAsync(20, 0, blog.Id, ct));
+                case SitePath.Post(var blogId, var blogPath, var slug) when await blogs.ByIdAsync(blogId, ct) is { } blog
+                                                                             && await content.GetPublishedPostAsync(blog.Id, slug, ct) is { } post:
+                    return Html.Render<PostView>(new { Ctx = await ctxf.CreateForItemAsync(post, ct: ct), Item = post, Tree = BlockTree.Parse(post.Blocks), Blog = blog,
+                        BlogPath = blogPath, Author = (await content.AuthorNamesAsync([post.AuthorId], ct)).GetValueOrDefault(post.AuthorId ?? 0) });
+                case SitePath.Moved(var to):
+                    return Results.Redirect(to + req.QueryString, permanent: true);
+                default:
+                    return Html.Render<MessagePage>(new { Ctx = await ctxf.CreateAsync(ct: ct) }, 404);
+            }
         });
 
         site.MapGet("/search", async (string? q, HttpRequest req, RenderContextFactory ctxf, PublicContent content, CancellationToken ct) =>
@@ -85,17 +85,18 @@ public static class SiteEndpoints
             return Feed(ctx, req, ctx.Site.Title, ctx.Site.Tagline, "/", await content.LatestPostsAsync(20, 0, null, ct));
         });
 
-        site.MapGet("/sitemap.xml", async (HttpRequest req, RenderContextFactory ctxf, PublicContent content, BlogService blogs, CancellationToken ct) =>
+        site.MapGet("/sitemap.xml", async (HttpRequest req, RenderContextFactory ctxf, PublicContent content, BlogService blogs, SiteTree tree, CancellationToken ct) =>
         {
             var ctx = await ctxf.CreateAsync(ct: ct);
             var baseUrl = BaseUrl(ctx.Site.BaseUrl, req);
             var sb = new StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
             sb.Append("<url><loc>").Append(System.Security.SecurityElement.Escape(baseUrl + "/")).Append("</loc></url>\n");
+            var map = await tree.GetAsync(ct);
             foreach (var b in await blogs.AllAsync(ct))
-                sb.Append("<url><loc>").Append(System.Security.SecurityElement.Escape($"{baseUrl}/{b.Slug}")).Append("</loc></url>\n");
+                sb.Append("<url><loc>").Append(System.Security.SecurityElement.Escape(baseUrl + map.BlogPath(b.Id))).Append("</loc></url>\n");
             foreach (var c in await content.AllPublishedAsync(ct))
             {
-                if (c.Id == ctx.Site.HomePageId) continue;
+                if (c.Id == ctx.Site.HomePageId || c.NoIndex) continue;
                 sb.Append("<url><loc>").Append(System.Security.SecurityElement.Escape(baseUrl + c.Url)).Append("</loc><lastmod>")
                   .Append(c.UpdatedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)).Append("</lastmod></url>\n");
             }
@@ -109,6 +110,19 @@ public static class SiteEndpoints
             return Results.Text($"User-agent: *\nDisallow: /admin/\nSitemap: {BaseUrl(ctx.Site.BaseUrl, req)}/sitemap.xml\n", "text/plain");
         });
 
+        // Browsers ask for /favicon.ico by themselves: send them to the ICO (or PNG) chosen in the settings.
+        app.MapGet("/favicon.ico", async (RenderContextFactory ctxf, PublicContent content, HttpResponse res, CancellationToken ct) =>
+        {
+            var site = (await ctxf.CreateAsync(ct: ct)).Site;
+            foreach (var id in new[] { site.FaviconIcoMediaId, site.FaviconMediaId, site.FaviconSvgMediaId })
+                if (id is { } mid && await content.MediaUrlAsync(mid, ct) is { } url)
+                {
+                    res.Headers.CacheControl = "public, max-age=86400";
+                    return Results.Redirect(url);
+                }
+            return Results.NotFound();
+        });
+
         // Not output-cached: files on disk, served with their own long cache headers.
         app.MapGet("/media/{name}", (string name, MediaService media, HttpResponse res) =>
         {
@@ -118,7 +132,7 @@ public static class SiteEndpoints
             var head = new byte[16];
             var n = sniff.Read(head, 0, head.Length);
             sniff.Dispose();
-            var type = MediaService.Sniff(head.AsSpan(0, n))?.Type ?? "application/octet-stream";
+            var type = MediaService.Sniff(head.AsSpan(0, n))?.Type ?? (name.EndsWith(".svg", StringComparison.Ordinal) ? "image/svg+xml" : "application/octet-stream");
             res.Headers.CacheControl = "public, max-age=31536000, immutable";
             res.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
             return Results.File(path, type, enableRangeProcessing: true);
@@ -136,7 +150,9 @@ public static class SiteEndpoints
 
     }
 
-    private static async Task<IResult> BlogPage(Blog blog, string path, int? skip, HttpRequest req, RenderContext ctx, PublicContent content,
+    /// <param name="path">Where this list is (/ for the home page), for "load more" links.</param>
+    /// <param name="blogPath">The blog's own address, for its feed.</param>
+    private static async Task<IResult> BlogPage(Blog blog, string path, string blogPath, int? skip, HttpRequest req, RenderContext ctx, PublicContent content,
         CancellationToken ct)
     {
         var size = Math.Clamp(blog.PostsPerPage, 1, 50);
@@ -152,7 +168,7 @@ public static class SiteEndpoints
         }
         return Html.Render<BlogIndex>(new
         {
-            Ctx = ctx, Posts = page, NextUrl = next, Heading = blog.Name, Description = blog.Description, FeedUrl = $"/{blog.Slug}/feed.xml",
+            Ctx = ctx, Posts = page, NextUrl = next, Heading = blog.Name, Description = blog.Description, FeedUrl = $"{blogPath}/feed.xml",
         });
     }
 

@@ -1,3 +1,4 @@
+using Homepage.Content;
 using Homepage.Common;
 using Homepage.Data;
 using Homepage.Themes;
@@ -25,7 +26,7 @@ public static class Html
         r.Headers["HX-Request"].ToString() == "true" && r.Headers["HX-Boosted"].ToString() != "true";
 }
 
-public sealed class RenderContextFactory(IDbContextFactory<AppDbContext> dbFactory, ThemeService themes)
+public sealed class RenderContextFactory(IDbContextFactory<AppDbContext> dbFactory, ThemeService themes, Homepage.Content.SiteTree tree)
 {
     public async Task<RenderContext> CreateAsync(bool edit = false, string region = "main", ActiveTheme? theme = null, CancellationToken ct = default)
     {
@@ -36,6 +37,29 @@ public sealed class RenderContextFactory(IDbContextFactory<AppDbContext> dbFacto
             Theme = theme ?? await themes.GetActiveAsync(ct),
             Edit = edit,
             EditRegion = region,
+            Links = await tree.GetAsync(ct),
+        };
+    }
+
+    /// <summary>The context of a page or post: theme, layout, CSS and indexing in effect (its own over the pages above it).</summary>
+    public async Task<RenderContext> CreateForItemAsync(ContentItem item, bool edit = false, string region = "main", CancellationToken ct = default)
+    {
+        var map = await tree.GetAsync(ct);
+        return await WithOptionsAsync(map.EffectiveFor(item.Type, item.ParentId, item.BlogId, PageOptionValues.Of(item)), edit, region, ct);
+    }
+
+    /// <summary>The context of a blog's post list: the options of the page the blog is under.</summary>
+    public async Task<RenderContext> CreateForBlogAsync(int blogId, CancellationToken ct = default) =>
+        await WithOptionsAsync((await tree.GetAsync(ct)).ForBlog(blogId), false, "main", ct);
+
+    private async Task<RenderContext> WithOptionsAsync(PageOptions o, bool edit, string region, CancellationToken ct)
+    {
+        var theme = o.ThemeId is { } tid ? await themes.GetPublishedAsync(tid, ct) : null;
+        var ctx = await CreateAsync(edit, region, theme, ct);
+        return new RenderContext
+        {
+            Site = ctx.Site, Theme = ctx.Theme, Edit = ctx.Edit, EditRegion = ctx.EditRegion, Links = ctx.Links,
+            Layout = o.Layout, PageCss = o.Css, NoIndex = o.NoIndex,
         };
     }
 }

@@ -4,7 +4,7 @@
     <Actions>
         @if (!isNew)
         {
-            <a class="btn" href="/@Blog!.Slug" target="_blank" rel="noopener">View ↗</a>
+            <a class="btn" href="@CurrentPath" target="_blank" rel="noopener">View ↗</a>
             <a class="btn" href="/admin/content?type=post&blog=@Blog.Id">Posts (@PostCount)</a>
             @if (CanDelete)
             {
@@ -18,14 +18,20 @@
     <ChildContent>
     @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
     @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
-    <form method="post" action="/admin/blogs" class="card narrow-card" x-data="{ slug: @System.Text.Json.JsonSerializer.Serialize(Slug) }">
+    <form method="post" action="/admin/blogs" class="card narrow-card"
+          x-data="{ slug: @System.Text.Json.JsonSerializer.Serialize(Slug), parent: @System.Text.Json.JsonSerializer.Serialize(ParentPageId?.ToString() ?? ""), paths: @System.Text.Json.JsonSerializer.Serialize(Parents.ToDictionary(p => p.Id.ToString(), p => p.Path)), get base() { return this.parent ? this.paths[this.parent] + '/' : '/' } }">
         <input type="hidden" name="__RequestVerificationToken" value="@Token" />
         @if (!isNew) { <input type="hidden" name="id" value="@Blog!.Id" /> }
         <label for="bn">Name</label>
         <input id="bn" name="name" type="text" value="@Name" maxlength="100" required placeholder="Releases" autofocus="@isNew" />
+        <label for="bpp">Under page <span class="muted">(optional)</span></label>
+        <select id="bpp" name="parentPageId" x-model="parent" data-search>
+            <option value="">(none, top level)</option>
+            @foreach (var p in Parents) { <option value="@p.Id" selected="@(p.Id == ParentPageId)">@p.Path · @p.Title</option> }
+        </select>
         <label for="bs">Address</label>
-        <div class="input-prefix"><span>/</span><input id="bs" name="slug" type="text" x-model="slug" maxlength="80" required placeholder="releases" /></div>
-        <div class="help">The blog is at <code x-text="'/' + (slug || '…')"></code>, its posts at <code x-text="'/' + (slug || '…') + '/post-name'"></code> and its feed at <code x-text="'/' + (slug || '…') + '/feed.xml'"></code>.
+        <div class="input-prefix"><span x-text="base">/</span><input id="bs" name="slug" type="text" x-model="slug" maxlength="80" required placeholder="releases" /></div>
+        <div class="help">The blog is at <code x-text="base + (slug || '…')"></code>, its posts at <code x-text="base + (slug || '…') + '/post-name'"></code> and its feed at <code x-text="base + (slug || '…') + '/feed.xml'"></code>.
             @if (!isNew) { <span>When you change it, the old address keeps working and redirects here.</span> }</div>
         @if (!isNew && Blog!.PreviousSlugs.Count > 0) { <div class="help">Old addresses that redirect here: @string.Join(", ", Blog.PreviousSlugs.Select(x => "/" + x))</div> }
         <label for="bd">Description</label>
@@ -46,6 +52,9 @@
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string Description { get; set; } = "";
     [Parameter] public int PostsPerPage { get; set; } = 10;
+    [Parameter] public int? ParentPageId { get; set; }
+    [Parameter] public List<ContentSettingsPage.ParentChoice> Parents { get; set; } = [];
+    [Parameter] public string CurrentPath { get; set; } = "/";
     [Parameter] public int PostCount { get; set; }
     [Parameter] public bool CanDelete { get; set; }
     [Parameter] public int? HomeBlogId { get; set; }

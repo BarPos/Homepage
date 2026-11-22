@@ -146,7 +146,7 @@ public sealed class PostgresTests(PostgresFixture pg)
         var cs = await MigratedDatabaseAsync();
         var factory = new TestDbFactory(cs);
         var cache = new MemoryCache(new MemoryCacheOptions());
-        var svc = new Homepage.Web.Rendering.PublicContent(factory, cache, new BlogService(factory, cache, new NullAudit(), Time));
+        var svc = new Homepage.Web.Rendering.PublicContent(factory, cache, new SiteTree(factory));
         var hits = await svc.SearchAsync("welcome");
         Assert.Contains(hits, h => h.Slug == "home");
         Assert.Empty(await svc.SearchAsync("zebra"));
@@ -192,7 +192,7 @@ public sealed class PostgresTests(PostgresFixture pg)
 
         var cache = new MemoryCache(new MemoryCacheOptions());
         var factory = new TestDbFactory(cs);
-        var pub = new Homepage.Web.Rendering.PublicContent(factory, cache, new BlogService(factory, cache, new NullAudit(), Time));
+        var pub = new Homepage.Web.Rendering.PublicContent(factory, cache, new SiteTree(factory));
         Assert.NotNull(await pub.GetPublishedPostAsync(blog.Id, "old-post"));
         Assert.Equal("/blog/old-post", (await pub.LatestPostsAsync(5)).Single().Url);
     }

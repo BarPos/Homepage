@@ -70,10 +70,18 @@ nav_order: 7
 - **The public cache** stores a full page and an htmx fragment separately, and only the exact header
   `HX-Request: true` counts as htmx, so no request can make the cache serve a fragment as a page.
 
+## Page options
+
+- A page's custom CSS needs `themes: rw` and is sanitized like a theme's: no `<`, no `@import`, no URLs to other
+  sites, so it cannot close its style element or load anything.
+- Theme, layout, CSS and no-index of a published page are live at once, so changing them needs `publish`.
+
 ## Uploads
 
-- The type is taken from the file's first bytes; only PNG, JPEG, GIF, WebP, AVIF, ICO and PDF are accepted (no
-  SVG, no HTML). The name on disk is random; the original name is only shown in the admin.
+- The type is taken from the file's first bytes; only PNG, JPEG, GIF, WebP, AVIF, ICO, SVG and PDF are accepted (no
+  HTML). The name on disk is random; the original name is only shown in the admin.
+- SVG images are parsed before they are stored (no DTDs, an `svg` root, SVG elements only) and refused when they
+  contain scripts, event handlers, embedded HTML or frames, links to other files, or styles that load other files.
 - Media responses send the real type, `nosniff`, and `Content-Security-Policy: default-src 'none'; style-src
   'unsafe-inline'; sandbox`, so even a disguised file cannot run script in the site's origin.
 - 20 MiB per file.

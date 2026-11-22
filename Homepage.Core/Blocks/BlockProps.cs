@@ -21,15 +21,32 @@ public sealed class BlogPickerAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class MenuPickerAttribute : Attribute;
 
-/// <summary>A link: http(s), mailto, tel, or site-relative. Validated server-side.</summary>
+/// <summary>
+/// A link: http(s), mailto, tel, site-relative, or a reference to a page, post or blog of the site ("page:12",
+/// "post:5", "blog:3"), which follows renames and moves. Validated server-side.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class SafeUrlAttribute : ValidationAttribute
 {
     public override bool IsValid(object? value) => value is not string s || s.Length == 0 || IsSafe(s);
 
+    /// <summary>"page:12" → (page, 12). Kinds: page, post, blog.</summary>
+    public static bool TryParseReference(string? url, out string kind, out int id)
+    {
+        kind = "";
+        id = 0;
+        if (url is null) return false;
+        var m = System.Text.RegularExpressions.Regex.Match(url.Trim(), "^(page|post|blog):([0-9]{1,9})$");
+        if (!m.Success) return false;
+        kind = m.Groups[1].Value;
+        id = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        return true;
+    }
+
     public static bool IsSafe(string url)
     {
         url = url.Trim();
+        if (TryParseReference(url, out _, out _)) return true;
         if (url.StartsWith('/') && !url.StartsWith("//", StringComparison.Ordinal)) return true;
         if (url.StartsWith('#')) return true;
         return Uri.TryCreate(url, UriKind.Absolute, out var uri)
@@ -47,6 +64,7 @@ public enum PostListLayout { List, Grid }
 public enum BarStyle { Glass, Solid, Transparent }
 public enum BarJustify { Spread, Start, Center, End }
 public enum BrandDisplay { LogoAndText, LogoOnly, TextOnly }
+public enum IconPosition { BeforeText, AfterText }
 
 public sealed class SectionProps
 {
@@ -90,6 +108,10 @@ public sealed class ButtonProps
     [Display(Name = "Link"), SafeUrl, StringLength(1000)] public string Url { get; set; } = "/";
     [Display(Name = "Style")] public ButtonStyle Style { get; set; } = ButtonStyle.Primary;
     [Display(Name = "Alignment")] public Align Align { get; set; } = Align.Left;
+    [Display(Name = "Open in a new tab")] public bool NewTab { get; set; }
+    [Display(Name = "Icon"), IconPicker, StringLength(80)] public string Icon { get; set; } = "";
+    [Display(Name = "Icon image (instead of an icon)"), MediaPicker] public int? IconMediaId { get; set; }
+    [Display(Name = "Icon position")] public IconPosition IconPosition { get; set; } = IconPosition.BeforeText;
 }
 
 public sealed class QuoteProps

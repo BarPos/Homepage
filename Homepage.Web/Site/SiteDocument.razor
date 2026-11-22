@@ -12,12 +12,20 @@
     <title>@(string.IsNullOrWhiteSpace(Title) ? Ctx.Site.Title : $"{Title} · {Ctx.Site.Title}")</title>
     @if (!string.IsNullOrWhiteSpace(Description)) { <meta name="description" content="@Description" /> }
     @if (!string.IsNullOrWhiteSpace(Author)) { <meta name="author" content="@Author" /> }
+    @if (Ctx.NoIndex) { <meta name="robots" content="noindex" /> }
     <meta property="og:title" content="@(Title ?? Ctx.Site.Title)" />
     <meta property="og:site_name" content="@Ctx.Site.Title" />
     @if (!string.IsNullOrWhiteSpace(Description)) { <meta property="og:description" content="@Description" /> }
     @if (!string.IsNullOrWhiteSpace(CanonicalUrl)) { <link rel="canonical" href="@CanonicalUrl" /> }
     <link rel="alternate" type="application/rss+xml" title="@Ctx.Site.Title" href="@(FeedUrl ?? "/feed.xml")" />
-    @if (_favicon is not null) { <link rel="icon" href="@_favicon" /> }
+    @* Several formats: each browser takes the best one it supports. *@
+    @if (_ico is not null) { <link rel="icon" href="@_ico" sizes="32x32" /> }
+    @if (_svg is not null) { <link rel="icon" href="@_svg" type="image/svg+xml" /> }
+    @if (_favicon is not null)
+    {
+        <link rel="icon" href="@_favicon" type="@(_favicon.EndsWith(".ico") ? "image/x-icon" : "image/png")" />
+        @if (_favicon.EndsWith(".png")) { <link rel="apple-touch-icon" href="@_favicon" /> }
+    }
     @if (ThemeCssInline is not null)
     {
         <style id="hp-theme">@((MarkupString)ThemeCssInline)</style>
@@ -27,6 +35,10 @@
         <link rel="stylesheet" href="@Ctx.Theme.CssUrl" />
     }
     <link rel="stylesheet" href="@Asset.Url("css/site.css")" />
+    @if (!string.IsNullOrWhiteSpace(Ctx.PageCss))
+    {
+        <style id="hp-page-css">@((MarkupString)Homepage.Themes.ThemeTokens.SanitizeCustomCss(Ctx.PageCss))</style>
+    }
     @if (Ctx.Edit || Ctx.EditRegion != "main" || CanvasMode)
     {
         <link rel="stylesheet" href="@Asset.Url("css/canvas.css")" />
@@ -38,21 +50,27 @@
 </head>
 <body class="@(CanvasMode ? "hp-canvas hp-edit-" + Ctx.EditRegion : "")">
     <div class="site">
-        <header class="site-top" data-region="header">
-            <CascadingValue Value="Ctx.ForRegion(EditorTarget.HeaderKind)" IsFixed="true">
-                <BlockList Nodes="Ctx.Theme.Header.Blocks" />
-            </CascadingValue>
-        </header>
+        @if (Ctx.Layout is not (PageLayout.NoHeader or PageLayout.Blank) || Ctx.EditRegion == EditorTarget.HeaderKind)
+        {
+            <header class="site-top" data-region="header">
+                <CascadingValue Value="Ctx.ForRegion(EditorTarget.HeaderKind)" IsFixed="true">
+                    <BlockList Nodes="Ctx.Theme.Header.Blocks" />
+                </CascadingValue>
+            </header>
+        }
         <main class="site-main" id="main" data-region="main">
             <CascadingValue Value="@MainCtx" IsFixed="true">
                 @ChildContent
             </CascadingValue>
         </main>
-        <footer class="site-footer" data-region="footer">
-            <CascadingValue Value="Ctx.ForRegion(EditorTarget.FooterKind)" IsFixed="true">
-                <BlockList Nodes="Ctx.Theme.Footer.Blocks" />
-            </CascadingValue>
-        </footer>
+        @if (Ctx.Layout is not (PageLayout.NoFooter or PageLayout.Blank) || Ctx.EditRegion == EditorTarget.FooterKind)
+        {
+            <footer class="site-footer" data-region="footer">
+                <CascadingValue Value="Ctx.ForRegion(EditorTarget.FooterKind)" IsFixed="true">
+                    <BlockList Nodes="Ctx.Theme.Footer.Blocks" />
+                </CascadingValue>
+            </footer>
+        }
     </div>
     @if (CanvasMode)
     {
@@ -82,12 +100,14 @@
     [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
     private RenderContext MainCtx => Ctx.ForRegion("main");
     private string GlassAttr => Ctx.Theme.Tokens.Glass ? "on" : "off";
-    private string? _favicon;
+    private string? _favicon, _svg, _ico;
     private bool _track;
 
     protected override async Task OnInitializedAsync()
     {
         if (Ctx.Site.FaviconMediaId is { } id) _favicon = await Content.MediaUrlAsync(id);
+        if (Ctx.Site.FaviconSvgMediaId is { } sid) _svg = await Content.MediaUrlAsync(sid);
+        if (Ctx.Site.FaviconIcoMediaId is { } iid) _ico = await Content.MediaUrlAsync(iid);
         _track = Track && !CanvasMode && !Ctx.Edit && ThemeCssInline is null && (await Analytics.SettingsAsync()).Enabled;
     }
 }

@@ -5,7 +5,7 @@
                 <h1>@Item.Title</h1>
                 <div class="post-meta">
                     @if (!string.IsNullOrEmpty(Author)) { <span class="post-author">By <strong>@Author</strong></span><span aria-hidden="true"> · </span> }
-                    <a class="post-blog" href="/@Blog.Slug">@Blog.Name</a><span aria-hidden="true"> · </span>
+                    <a class="post-blog" href="@BlogPath">@Blog.Name</a><span aria-hidden="true"> · </span>
                     <time datetime="@Item.PublishedAtUtc?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@Item.PublishedAtUtc?.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)</time><span aria-hidden="true"> · </span>
                     @ContentExtractor.ReadingMinutes(Item.SearchText) min read
                 </div>
@@ -23,6 +23,8 @@
     [Parameter, EditorRequired] public Blog Blog { get; set; } = default!;
     /// <summary>The display name of the post's author; null when the account is gone.</summary>
     [Parameter] public string? Author { get; set; }
-    private string FeedPath => "/" + Blog.Slug + "/feed.xml";
-    private string? Canonical => string.IsNullOrEmpty(Ctx.Site.BaseUrl) ? null : $"{Ctx.Site.BaseUrl.TrimEnd('/')}/{Blog.Slug}/{Item.Slug}";
+    /// <summary>The blog's address (/releases, /docs/releases).</summary>
+    [Parameter] public string BlogPath { get; set; } = "/blog";
+    private string FeedPath => BlogPath + "/feed.xml";
+    private string? Canonical => string.IsNullOrEmpty(Ctx.Site.BaseUrl) || Ctx.NoIndex ? null : $"{Ctx.Site.BaseUrl.TrimEnd('/')}{BlogPath}/{Item.Slug}";
 }

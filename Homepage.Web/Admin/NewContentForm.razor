@@ -15,15 +15,25 @@
             </div>
             <div x-show="type === 'Post'" x-cloak>
                 <label for="nb">Blog</label>
-                <select id="nb" name="blogId">
-                    @foreach (var b in Blogs) { <option value="@b.Id" selected="@(b.Id == BlogId)">@b.Name (/@b.Slug)</option> }
+                <select id="nb" name="blogId" data-search>
+                    @foreach (var b in Blogs) { <option value="@b.Id" selected="@(b.Id == BlogId)">@b.Name (@(_map?.BlogPath(b.Id) ?? "/" + b.Slug))</option> }
                 </select>
             </div>
         </div>
+        @if (Parents.Count > 0)
+        {
+            <div x-show="type !== 'Post'">
+                <label for="np">Under page <span class="muted">(optional)</span></label>
+                <select id="np" name="parentId" data-search>
+                    <option value="">(none, top level)</option>
+                    @foreach (var p in Parents) { <option value="@p.Id">@p.Path · @p.Title</option> }
+                </select>
+            </div>
+        }
         @if (Groups.Count > 1)
         {
             <label for="ng">Group</label>
-            <select id="ng" name="groupId">
+            <select id="ng" name="groupId" data-search>
                 @foreach (var g in Groups) { <option value="@g.Id" selected="@(g.Id == DefaultGroupId)">@g.Name</option> }
             </select>
             <div class="help">Decides who can see and change it.</div>
@@ -45,6 +55,10 @@
     [Parameter] public ContentType? Type { get; set; }
     /// <summary>Preselected blog (the list's blog filter).</summary>
     [Parameter] public int? BlogId { get; set; }
+    [Parameter] public List<ContentSettingsPage.ParentChoice> Parents { get; set; } = [];
     [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    [Inject] public SiteTree Tree { get; set; } = default!;
+    private SiteMap? _map;
+    protected override async Task OnInitializedAsync() => _map = await Tree.GetAsync();
     private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
 }

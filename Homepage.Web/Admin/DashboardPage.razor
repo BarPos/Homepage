@@ -14,7 +14,7 @@
         @if (VisitorsToday is { } v) { <a class="stat" href="/admin/analytics?range=today"><span class="muted">Visitors today</span><strong>@AnalyticsFormat.Number(v)</strong></a> }
         <a class="stat" href="/admin/themes"><span class="muted">Active theme</span><strong class="stat-text">@ThemeName</strong></a>
     </div>
-    @if (CreateGroups.Count > 0) { <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Blogs="Blogs" /> }
+    @if (CreateGroups.Count > 0) { <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Blogs="Blogs" Parents="Parents" /> }
     <section>
         <h2 class="section-title">Recently changed</h2>
         <ContentTable Items="Recent" Groups="GroupNames" BlogSlugs="BlogSlugs" BlogNames="BlogNames" HomePageId="HomePageId" />
@@ -36,4 +36,5 @@
     [Parameter] public int? DefaultGroupId { get; set; }
     /// <summary>Null when the user cannot see analytics.</summary>
     [Parameter] public long? VisitorsToday { get; set; }
+    [Parameter] public List<ContentSettingsPage.ParentChoice> Parents { get; set; } = [];
 }

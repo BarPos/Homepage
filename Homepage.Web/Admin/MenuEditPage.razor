@@ -34,12 +34,26 @@
         </div>
         <h2 class="card-title" style="margin-top:20px">Links</h2>
         <div class="link-rows">
-            <div class="link-row link-row-head muted small" x-show="rows.length"><span>Label</span><span>Link</span><span></span></div>
+            <div class="link-row link-row-head muted small" x-show="rows.length"><span>Icon</span><span>Label</span><span>Link</span><span title="Open in a new tab">New tab</span><span></span></div>
             <template x-for="(row, i) in rows" :key="row.id">
                 <div class="link-row">
+                    <span class="icon-field compact">
+                        <button type="button" class="icon-preview icon-pick" data-open-dialog="icon-dialog" x-bind:data-icon-for="'icon-' + row.id"
+                                title="Choose an icon" aria-label="Choose an icon" x-html="row.svg || '<span class=&quot;muted&quot;>+</span>'"></button>
+                        <input type="hidden" name="icon" x-bind:id="'icon-' + row.id" x-model="row.icon" x-on:hp-icon="row.svg = $event.detail.svg" />
+                    </span>
                     <input type="text" name="label" x-model="row.label" placeholder="Label" aria-label="Label" maxlength="100" />
-                    <input type="text" name="url" x-model="row.url" placeholder="/page or https://…" aria-label="Link" maxlength="1000" />
+                    <span class="link-field" data-url-field>
+                        <input type="text" name="url" x-bind:id="'url-' + row.id" x-model="row.url" placeholder="/page or https://…" aria-label="Link" maxlength="1000" />
+                        <button type="button" class="btn-sm" data-open-dialog="link-dialog" x-bind:data-link-for="'url-' + row.id" title="Choose a page, blog or post">Choose…</button>
+                        <span class="link-resolved" x-show="row.target" x-text="row.target" x-on:hp-link.window="if ($event.detail.id === 'url-' + row.id) row.target = $event.detail.label"></span>
+                    </span>
+                    <label class="inline new-tab" title="Open in a new tab">
+                        <input type="hidden" name="newTab" x-bind:value="row.newTab ? 'true' : 'false'" />
+                        <input type="checkbox" x-model="row.newTab" aria-label="Open in a new tab" />
+                    </label>
                     <span class="row-tools">
+                        <button type="button" class="btn-sm icon" x-show="row.icon" x-on:click="row.icon = ''; row.svg = ''" title="Remove the icon" aria-label="Remove the icon">⌫</button>
                         <button type="button" class="btn-sm icon" x-on:click="if (i > 0) rows.splice(i - 1, 0, rows.splice(i, 1)[0])" x-bind:disabled="i === 0" title="Move up" aria-label="Move up">↑</button>
                         <button type="button" class="btn-sm icon" x-on:click="if (i < rows.length - 1) rows.splice(i + 1, 0, rows.splice(i, 1)[0])" x-bind:disabled="i === rows.length - 1" title="Move down" aria-label="Move down">↓</button>
                         <button type="button" class="btn-sm icon" x-on:click="rows.splice(i, 1)" title="Remove link" aria-label="Remove link">✕</button>
@@ -49,13 +63,24 @@
             <p class="muted" x-show="!rows.length">No links yet.</p>
         </div>
         <div class="form-actions spread">
-            <button type="button" x-on:click="rows.push({ id: Date.now() + Math.random(), label: '', url: '' }); $nextTick(() => $root.querySelectorAll('input[name=label]')[rows.length - 1]?.focus())">+ Add link</button>
+            <button type="button" x-on:click="rows.push({ id: Date.now() + Math.random(), label: '', url: '', icon: '', svg: '', newTab: false }); $nextTick(() => $root.querySelectorAll('input[name=label]')[rows.length - 1]?.focus())">+ Add link</button>
             <span>
                 <a class="btn" href="/admin/menus">Cancel</a>
                 <button class="btn-primary">@(isNew ? "Create menu" : "Save menu")</button>
             </span>
         </div>
     </form>
+    <LinkDialog />
+    <dialog id="icon-dialog" class="modal icon-modal" aria-labelledby="icon-dialog-title" data-light-dismiss>
+        <h2 id="icon-dialog-title">Choose an icon</h2>
+        <input type="search" name="q" placeholder="Search: home, mail, arrow, github…" autocomplete="off" aria-label="Search icons"
+               hx-get="/admin/editor/icons" hx-trigger="input changed delay:200ms, load" hx-target="#icon-results" hx-swap="innerHTML" form="none" />
+        <div id="icon-results" class="icon-grid" role="listbox" aria-label="Icons"></div>
+        <div class="modal-actions">
+            <span class="muted small" style="margin-right:auto">Font Awesome Free @Icons.Version · CC BY 4.0</span>
+            <button type="button" data-close-dialog>Close</button>
+        </div>
+    </dialog>
     </ChildContent>
 </AdminShell>
 @code {
@@ -64,10 +89,18 @@
     [Parameter] public string Name { get; set; } = "";
     [Parameter] public string Key { get; set; } = "";
     [Parameter] public IReadOnlyList<MenuLink> Links { get; set; } = [];
+    [Inject] public SiteTree Tree { get; set; } = default!;
+    private SiteMap? Map;
+    protected override async Task OnInitializedAsync() => Map = await Tree.GetAsync();
     [Parameter] public string? Message { get; set; }
     [Parameter] public string? Error { get; set; }
     [CascadingParameter] public HttpContext? HttpContext { get; set; }
     private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
     private string RowsJson() =>
-        System.Text.Json.JsonSerializer.Serialize(Links.Select((l, i) => new { id = i, label = l.Label, url = l.Url }));
+        System.Text.Json.JsonSerializer.Serialize(Links.Select((l, i) => new
+        {
+            id = i, label = l.Label, url = l.Url, icon = l.Icon ?? "", newTab = l.NewTab,
+            target = Map?.Describe(l.Url) is { } d ? $"→ {d.Title} · {d.Path}" : SafeUrlAttribute.TryParseReference(l.Url, out _, out _) ? "⚠ The linked page no longer exists" : "",
+            svg = Icons.Get(l.Icon) is { } ic ? Icons.Svg(ic) : "",
+        }));
 }

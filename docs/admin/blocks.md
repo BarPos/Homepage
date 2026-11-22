@@ -59,12 +59,29 @@ A thin horizontal line that fades out at both ends. No settings.
 Markdown with tables, footnotes, task lists, auto-links and heading anchors. Raw HTML in it is sanitized: no
 scripts, event handlers or `javascript:` links. Up to 200,000 characters.
 
+The inspector has an editor with two modes, switched with the tabs above it: **Rich text** (format with the toolbar,
+as in a word processor) and **Markdown** (the text itself, with a preview tab). Both edit the same Markdown; your
+last choice is remembered in the browser. **⤢** opens a bigger editor (Esc closes it).
+
+Rich text cannot show everything Markdown can. Footnotes, HTML and `{…}` link attributes appear there as small grey
+chips (hover one to see it) and are kept exactly as written; switch to Markdown to change them. Text between HTML
+tags, such as the inside of a `<details>` block, stays editable. Rich text may write tables and lists in a different
+but equivalent style (`| --- |`, `*` bullets).
+
+The toolbar's **link to a page** button (in the **…** menu when the panel is narrow) opens the same chooser as
+buttons and menus: the link points at the page, post or blog itself (`[text](page:12)`) and keeps working when it is
+renamed or moved. If it is deleted or unpublished, the words stay and the link goes.
+
 ```markdown
 **bold**, *italic*, [a link](https://example.com), `code`
+[opens in a new tab](https://example.com){new}
 # Heading
 - list item
 > quote
 ```
+
+`{new}` after a link (or `{target=_blank}`) opens it in a new tab, with `rel="noopener noreferrer"`. Other targets
+are removed.
 
 ### Image
 | Setting | Values | Default |
@@ -78,9 +95,18 @@ scripts, event handlers or `javascript:` links. Up to 200,000 characters.
 | Setting | Values | Default |
 |---|---|---|
 | Text | up to 100 characters, required | Read more |
-| Link | `/path`, `#anchor`, `https://…`, `http://…`, `mailto:`, `tel:`. Anything else is refused. | `/` |
+| Link | **Choose…** picks a page, blog or post of the site: the button then links to it wherever it moves (it is stored as `page:12`, `post:5` or `blog:3`, and the inspector shows where it points). Or type `/path`, `#anchor`, `https://…`, `http://…`, `mailto:`, `tel:`; anything else is refused. | `/` |
 | Style | *Primary*, *Secondary* (accent color), *Outline* (glass) | Primary |
 | Alignment | Left, Center, Right | Left |
+| Open in a new tab | adds `target="_blank"` and `rel="noopener noreferrer"`, and tells screen readers | off |
+| Icon | a [Font Awesome Free](https://fontawesome.com) icon (2,800+, solid, regular and brands), chosen and searched in a dialog | none |
+| Icon image | an image from **Media** instead of an icon (for a logo, say) | none |
+| Icon position | before or after the text | before |
+
+If the chosen page is deleted or unpublished, the button is left out of the public site, and the editor says so.
+
+Icons are drawn as inline SVG in the text color: no web font or extra stylesheet is loaded on the page. Font Awesome
+Free icons are licensed CC BY 4.0.
 
 ### Quote
 Quote text (up to 2,000 characters) and an optional attribution.
@@ -106,7 +132,7 @@ The newest published posts, read when the page is rendered.
 
 ### Menu
 A menu from **Menus**, aligned left, center or right. If its menu is deleted, the block shows nothing until you pick
-another one.
+another one. Links can have an icon and open in a new tab (set in the menu editor).
 
 ### Site bar
 The bar at the top (or bottom) of the site: a row holding the brand, menus, buttons, spacers or text. Only in a

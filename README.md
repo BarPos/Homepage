@@ -61,11 +61,12 @@ into the layers tree, drag in the canvas, inspector, device preview, publish), M
 blocks, themes (3 built in, duplicate, live theme editor, editable header and footer with a site bar and logo block),
 menus (create, rename, delete), OTRS-style permission groups (users, groups, roles, the three relation screens,
 effective-permission view), media uploads, audit log, settings, profiles with two-factor sign-in, privacy-friendly
-built-in analytics (visitors, visits, sources, countries, devices; no cookies), self-update service, CLI, release
-build, installer/updater/backup scripts, CI workflows.
+built-in analytics (visitors, visits, sources, countries, devices; no cookies), subpages and blogs under pages,
+per-page theme, layout, CSS and no-index, a rich text / Markdown editor for text blocks, icons and link choosers,
+favicons in several formats, self-update service, CLI, release build, installer/updater/backup scripts, CI workflows.
 
 **Not built yet** (described in techstack.md): undo/redo, inline text editing, splitting and merging Markdown blocks,
-rich-text (Tiptap) block, global blocks, page templates and section presets, theme import/export and theme
+global blocks, page templates and section presets, theme import/export and theme
 versions, self-hosted fonts, forms and form submissions, scheduled publishing, revision restore and trash, image
 resizing, member groups, external group mapping (OIDC/LDAP), release signing, Tailwind (hand-written CSS
 on the same CSS variables is used instead).
@@ -76,3 +77,13 @@ Ubuntu 24.04+ with `install.sh` and systemd, self-update from the GitHub release
 [BarPos/Homepage](https://github.com/BarPos/Homepage) with automatic rollback, and `backup.sh`. See techstack.md
 section 8. Development builds make no update checks (`Updates:GitHubRepository` is empty in
 `appsettings.Development.json`).
+
+## Third-party
+
+Bundled, with their licenses: [htmx](https://htmx.org) (0BSD), [Alpine.js](https://alpinejs.dev) (MIT),
+[SortableJS](https://sortablejs.github.io/Sortable/) (MIT), [Toast UI Editor](https://ui.toast.com/tui-editor) 3.2.2
+with ProseMirror (MIT; bundled into `Homepage.Web/wwwroot/lib/toastui/`), [Font Awesome Free](https://fontawesome.com)
+7.3.1 icons (CC BY 4.0, `Homepage.Core/Blocks/Icons/`), [Markdig](https://github.com/xoofx/markdig) (BSD-2),
+[HtmlSanitizer](https://github.com/mganss/HtmlSanitizer) (MIT), [QRCoder](https://github.com/codebude/QRCoder) (MIT),
+[MaxMind.Db](https://github.com/maxmind/MaxMind-DB-Reader-dotnet) (Apache-2.0). Country data: DB-IP Lite (CC BY 4.0),
+downloaded at run time.

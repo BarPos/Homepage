@@ -60,15 +60,20 @@ public sealed class Blog
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
-    /// <summary>The first URL segment: /{Slug} lists the posts, /{Slug}/{post} shows one.</summary>
+    /// <summary>The last URL segment: /{parent page path}/{Slug} lists the posts, …/{Slug}/{post} shows one.</summary>
     public string Slug { get; set; } = "";
+    /// <summary>The page the blog lives under (its address starts with that page's address); null = top level.</summary>
+    public int? ParentPageId { get; set; }
     public string Description { get; set; } = "";
     public int PostsPerPage { get; set; } = 10;
-    /// <summary>Earlier addresses; requests to them are redirected (301) to the current one.</summary>
+    /// <summary>Earlier addresses (paths without the leading slash); requests to them are redirected (301) to the current one.</summary>
     public List<string> PreviousSlugs { get; set; } = [];
     public DateTime CreatedAtUtc { get; set; }
 }
 public enum ContentStatus { Draft = 0, Published = 1 }
+
+/// <summary>Which parts of the site frame a page shows.</summary>
+public enum PageLayout { Full = 0, NoHeader = 1, NoFooter = 2, Blank = 3 }
 
 /// <summary>A page or a blog post. Content is a block tree (JSON, see Homepage.Blocks).</summary>
 public sealed class ContentItem
@@ -76,6 +81,7 @@ public sealed class ContentItem
     public int Id { get; set; }
     public ContentType Type { get; set; }
     public int GroupId { get; set; }
+    /// <summary>Pages only: the page this one is under (/parent/child); null = top level.</summary>
     public int? ParentId { get; set; }
     /// <summary>Posts only: the blog the post belongs to.</summary>
     public int? BlogId { get; set; }
@@ -90,6 +96,18 @@ public sealed class ContentItem
     public bool EverPublished { get; set; }
     public DateTime? PublishedAtUtc { get; set; }
     public int? AuthorId { get; set; }
+    // Appearance options. A subpage (and a post or post list of a blog under a page) takes them from the page above
+    // unless it sets its own; a top-level page falls back to the site's defaults.
+    /// <summary>True: the theme of the page above (top level: the site's theme). False: <see cref="ThemeId"/>.</summary>
+    public bool InheritTheme { get; set; } = true;
+    /// <summary>With <see cref="InheritTheme"/> off: a theme for this item; null = the site's active theme.</summary>
+    public int? ThemeId { get; set; }
+    /// <summary>Null = the layout of the page above (top level: header and footer).</summary>
+    public PageLayout? Layout { get; set; }
+    /// <summary>Extra CSS for this item, added after the CSS of the pages above it (sanitized like a theme's custom CSS).</summary>
+    public string CustomCss { get; set; } = "";
+    /// <summary>Ask search engines not to index it (robots meta tag, left out of the sitemap). Null = like the page above (top level: index).</summary>
+    public bool? NoIndex { get; set; }
     /// <summary>Text extracted from the published blocks, for full-text search.</summary>
     public string SearchText { get; set; } = "";
     public NpgsqlTypes.NpgsqlTsVector? SearchVector { get; set; }

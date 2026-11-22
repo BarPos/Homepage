@@ -54,19 +54,31 @@ else
             else if (p.GetCustomAttribute<MediaPickerAttribute>() is not null)
             {
                 <label for="@id">@label</label>
-                <select id="@id" name="@name">
+                <select id="@id" name="@name" data-search>
                     <option value="">(none)</option>
                     @foreach (var m in Media.Where(m => m.ContentType.StartsWith("image/", StringComparison.Ordinal)))
                     {
-                        <option value="@m.Id" selected="@(Equals(m.Id, value))">@m.FileName</option>
+                        <option value="@m.Id" selected="@(Equals(m.Id, value))" data-thumb="/media/@m.StoredName">@m.FileName</option>
                     }
                 </select>
                 <div class="help"><a href="/admin/media" target="_blank">Upload images</a> in Media, then reselect the block.</div>
             }
+            else if (p.GetCustomAttribute<IconPickerAttribute>() is not null)
+            {
+                var current = Icons.Get(value as string);
+                _iconFields.Add(id);
+                <label for="@id">@label</label>
+                <div class="icon-field">
+                    <span class="icon-preview" data-icon-preview="@id">@if (current is not null) { @((MarkupString)Icons.Svg(current)) } else { <span class="muted">—</span> }</span>
+                    <input id="@id" name="@name" type="text" value="@value" maxlength="80" placeholder="none" readonly />
+                    <button type="button" class="btn-sm" data-open-dialog="icon-dialog" data-icon-for="@id">Choose…</button>
+                    <button type="button" class="btn-sm" data-icon-clear="@id" title="No icon" aria-label="No icon">✕</button>
+                </div>
+            }
             else if (p.GetCustomAttribute<BlogPickerAttribute>() is not null)
             {
                 <label for="@id">@label</label>
-                <select id="@id" name="@name">
+                <select id="@id" name="@name" data-search>
                     <option value="0">All blogs</option>
                     @foreach (var b in Blogs) { <option value="@b.Id" selected="@(Equals(b.Id, value))">@b.Name</option> }
                 </select>
@@ -74,10 +86,21 @@ else
             else if (p.GetCustomAttribute<MenuPickerAttribute>() is not null)
             {
                 <label for="@id">@label</label>
-                <select id="@id" name="@name">
+                <select id="@id" name="@name" data-search>
                     <option value="">(no menu)</option>
                     @foreach (var m in Menus) { <option value="@m.Key" selected="@(m.Key == (string?)value)">@m.Name</option> }
                 </select>
+            }
+            else if (p.GetCustomAttribute<SafeUrlAttribute>() is not null)
+            {
+                _linkFields = true;
+                <label for="@id">@label</label>
+                <div class="link-field">
+                    <input id="@id" name="@name" type="text" value="@value" maxlength="@(p.GetCustomAttribute<StringLengthAttribute>()?.MaximumLength)" placeholder="/page or https://…" />
+                    <button type="button" class="btn-sm" data-open-dialog="link-dialog" data-link-for="@id" title="Choose a page, blog or post">Choose…</button>
+                </div>
+                <div class="link-resolved" data-link-resolved="@id">@LinkLabel(value as string)</div>
+                <div class="help">A page, blog or post of this site (follows renames and moves), or any address (https://…, mailto:…).</div>
             }
             else if (t == typeof(int))
             {
@@ -88,8 +111,9 @@ else
             else if (p.GetCustomAttribute<DataTypeAttribute>()?.DataType == DataType.MultilineText)
             {
                 <label for="@id">@label</label>
-                <textarea id="@id" name="@name" spellcheck="@(Node.Type == "html" ? "false" : "true")">@value</textarea>
-                @if (Node.Type == "markdown") { <div class="help">Markdown: **bold**, *italic*, [link](https://…), # heading, - list, > quote. The canvas updates as you type.</div> }
+                @if (Node.Type == "markdown") { _linkFields = true; }
+                <textarea id="@id" name="@name" spellcheck="@(Node.Type == "html" ? "false" : "true")" data-md-editor="@(Node.Type == "markdown" ? "" : null)">@value</textarea>
+                @if (Node.Type == "markdown") { <div class="help">The canvas updates as you type. In Markdown, <code>[text](https://…){new}</code> makes a link that opens in a new tab.</div> }
             }
             else
             {
@@ -99,6 +123,21 @@ else
         }
         </fieldset>
     </form>
+    @if (_linkFields && CanEdit) { <Homepage.Web.Admin.LinkDialog /> }
+    @if (_iconFields.Count > 0 && CanEdit)
+    {
+        @* Outside the form: typing in the search must not save the block. *@
+        <dialog id="icon-dialog" class="modal icon-modal" aria-labelledby="icon-dialog-title" data-light-dismiss>
+            <h2 id="icon-dialog-title">Choose an icon</h2>
+            <input type="search" name="q" placeholder="Search: home, mail, arrow, github…" autocomplete="off" aria-label="Search icons"
+                   hx-get="/admin/editor/icons" hx-trigger="input changed delay:200ms, load" hx-target="#icon-results" hx-swap="innerHTML" />
+            <div id="icon-results" class="icon-grid" role="listbox" aria-label="Icons"></div>
+            <div class="modal-actions">
+                <span class="muted small" style="margin-right:auto">Font Awesome Free @Icons.Version · CC BY 4.0</span>
+                <button type="button" data-close-dialog>Close</button>
+            </div>
+        </dialog>
+    }
 }
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
@@ -107,6 +146,19 @@ else
     [Parameter] public List<MediaItem> Media { get; set; } = [];
     [Parameter] public List<Menu> Menus { get; set; } = [];
     [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
+
+    private readonly List<string> _iconFields = [];
+    private bool _linkFields;
+    [Inject] public SiteTree Tree { get; set; } = default!;
+    private SiteMap? _map;
+    protected override async Task OnInitializedAsync() => _map = await Tree.GetAsync();
+
+    /// <summary>"→ Team · /about/team" for a reference; a warning when its target is gone; nothing for plain addresses.</summary>
+    private string LinkLabel(string? url)
+    {
+        if (!SafeUrlAttribute.TryParseReference(url, out _, out _)) return "";
+        return _map?.Describe(url!) is { } d ? $"→ {d.Title} · {d.Path}{(d.Published ? "" : " (draft)")}" : "⚠ The linked page no longer exists. Choose another.";
+    }
 
     private static string Humanize(string s) =>
         System.Text.RegularExpressions.Regex.Replace(s, "(?<=[a-z])(?=[A-Z])", " ");

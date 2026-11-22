@@ -96,6 +96,59 @@
     show();
   }
 
+  // Link chooser: a dialog of pages, blogs and posts; choosing one puts its address in the field.
+  let linkTarget = null;
+  document.addEventListener("click", (e) => {
+    const opener = e.target.closest && e.target.closest("[data-link-for]");
+    if (opener) { linkTarget = opener.dataset.linkFor; return; }
+    const choice = e.target.closest && e.target.closest("[data-link-value]");
+    if (!choice) return;
+    const value = choice.dataset.linkValue, label = "→ " + choice.dataset.linkLabel;
+    // The Markdown editor asks for a link through a callback instead of a field.
+    if (linkTarget === "@markdown" && typeof window.hpLinkPick === "function") {
+      choice.closest("dialog")?.close();
+      window.hpLinkPick(value, choice.dataset.linkTitle || "");
+      return;
+    }
+    const input = linkTarget && document.getElementById(linkTarget);
+    if (!input) return;
+    input.value = value;
+    const shown = document.querySelector('[data-link-resolved="' + linkTarget + '"]');
+    if (shown) shown.textContent = label;
+    window.dispatchEvent(new CustomEvent("hp-link", { detail: { id: linkTarget, value, label } }));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    choice.closest("dialog")?.close();
+    input.focus();
+  });
+
+  document.addEventListener("input", (e) => {
+    const id = e.target && e.target.id;
+    if (!id || e.isTrusted === false) return;
+    const shown = document.querySelector('[data-link-resolved="' + id + '"]');
+    if (shown && !/^(page|post|blog):\d+$/.test(e.target.value.trim())) shown.textContent = "";
+  });
+
+  // Icon picker (inspector): a dialog of icons; choosing one fills the field and saves the block.
+  let iconTarget = null;
+  document.addEventListener("click", (e) => {
+    const opener = e.target.closest && e.target.closest("[data-icon-for]");
+    if (opener) { iconTarget = opener.dataset.iconFor; return; }
+    const clear = e.target.closest && e.target.closest("[data-icon-clear]");
+    const choice = e.target.closest && e.target.closest("[data-icon-value]");
+    if (!clear && !choice) return;
+    const id = clear ? clear.dataset.iconClear : iconTarget;
+    const input = id && document.getElementById(id);
+    if (!input) return;
+    input.value = clear ? "" : choice.dataset.iconValue;
+    const preview = document.querySelector('[data-icon-preview="' + id + '"]');
+    if (preview) preview.innerHTML = clear ? '<span class="muted">—</span>' : choice.innerHTML;
+    input.dispatchEvent(new CustomEvent("hp-icon", { bubbles: true, detail: { value: input.value, svg: clear ? "" : choice.innerHTML } }));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    if (choice) choice.closest("dialog")?.close();
+  });
+
   // In-page dialogs: <button data-open-dialog="id" data-dialog-type="Post">; [data-close-dialog] or Esc or the backdrop close.
   document.addEventListener("click", (e) => {
     const opener = e.target.closest && e.target.closest("[data-open-dialog]");

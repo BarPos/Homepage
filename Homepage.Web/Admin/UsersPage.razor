@@ -9,7 +9,7 @@
             <option value="valid" selected="@(Url["status"] == "valid")">Valid</option>
             <option value="invalid" selected="@(Url["status"] == "invalid")">Invalid</option>
         </select>
-        <select name="role" aria-label="Role">
+        <select name="role" aria-label="Role" data-search>
             <option value="">Any role</option>
             @foreach (var r in Roles) { <option value="@r.Id" selected="@(r.Id.ToString() == Url["role"])">@r.Name</option> }
         </select>
