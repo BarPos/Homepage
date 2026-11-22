@@ -3,12 +3,15 @@
 <div class="blk">
     @if (_posts is { Count: > 0 })
     {
-        <ul class="posts @(p.Layout == PostListLayout.Grid ? "posts-grid" : "")">
+        <ul class="posts @(p.Layout == PostListLayout.Grid ? "posts-grid" : "")" style="@(p.Layout == PostListLayout.Grid ? $"--grid-cols:{Math.Clamp(p.GridColumns, 1, 4)}" : null)">
             @foreach (var post in _posts)
             {
                 <li class="post-card">
                     <h3><a href="@post.Url">@post.Title</a></h3>
-                    <div class="post-meta">@if (!string.IsNullOrEmpty(post.Author)) { <span class="post-author">@post.Author</span><span aria-hidden="true"> · </span> }<time datetime="@post.PublishedAtUtc?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@post.PublishedAtUtc?.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)</time></div>
+                    @if ((p.ShowAuthor && !string.IsNullOrEmpty(post.Author)) || p.ShowDate)
+                    {
+                        <div class="post-meta">@if (p.ShowAuthor && !string.IsNullOrEmpty(post.Author)) { <span class="post-author">@post.Author</span>@if (p.ShowDate) { <span aria-hidden="true"> · </span> } }@if (p.ShowDate) { <time datetime="@post.PublishedAtUtc?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@post.PublishedAtUtc?.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)</time> }</div>
+                    }
                     @if (p.ShowExcerpt && !string.IsNullOrWhiteSpace(post.Excerpt)) { <p>@post.Excerpt</p> }
                 </li>
             }

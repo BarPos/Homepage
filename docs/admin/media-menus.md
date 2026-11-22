@@ -66,7 +66,8 @@ empty one.
 - **Links:** each is a label and an address: `/path`, `#anchor`, `https://…`, `http://…`, `mailto:` or `tel:`.
   **Choose…** next to the address picks a page, blog or post of the site (searchable): the link then follows it when
   it is renamed or moved, and is left out while it is unpublished or after it is deleted. For another site, type the
-  address. Anything else is refused, and the editor keeps what you typed.
+  address. Anything else is refused, and the editor keeps what you typed. A chosen page shows as a chip with its
+  title and address (✕ goes back to typing an address); a draft is marked *hidden on the site until published*.
 - A link can have an **icon** (the square before the label opens the icon chooser; **⌫** removes it) and can **open in
   a new tab** (the checkbox).
 - **+ Add link**, **↑** / **↓** to reorder, **✕** to remove, then **Create menu** or **Save menu**. The public site

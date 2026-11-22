@@ -49,4 +49,11 @@ public static class Css
 
     /// <summary>Only known color tokens become classes; anything else falls back to the page background.</summary>
     public static string Background(string token) => ThemeTokens.ColorNames.Contains(token) ? "bg-" + token : "bg-bg";
+
+    /// <summary>A background class, or nothing for "no color".</summary>
+    public static string? OptionalBackground(string token) => ThemeTokens.ColorNames.Contains(token) ? "bg-" + token + " has-bg" : null;
+
+    public static string VAlign(Homepage.Blocks.VerticalAlign v) => "va-" + v.ToString().ToLowerInvariant();
+    public static string Width(Homepage.Blocks.ContentWidth w) => "w-" + w.ToString().ToLowerInvariant();
+    public static string Kebab(Enum e) => System.Text.RegularExpressions.Regex.Replace(e.ToString(), "(?<=[a-z])(?=[A-Z])", "-").ToLowerInvariant();
 }

@@ -208,8 +208,12 @@ textarea.plain{font-family:inherit;font-size:inherit;min-height:64px}
 /* ---- menu editor */
 .menu-editor{max-width:860px}
 .link-rows{display:grid;gap:8px}
-.link-row{display:grid;grid-template-columns:36px minmax(0,1fr) minmax(0,1.5fr) 56px auto;gap:8px;align-items:center}
-.link-row .new-tab{justify-content:center}
+/* every row is its own grid: fixed widths for the narrow columns keep them lined up with the header */
+.link-row{display:grid;grid-template-columns:36px minmax(0,1fr) minmax(0,1.6fr) 64px 132px;gap:8px;align-items:start}
+.link-row>input,.link-row .link-field{min-height:36px}
+.link-row .new-tab{justify-content:center;height:36px;margin:0}
+.link-row .row-tools{height:36px;align-items:center;justify-content:flex-end}
+.link-row-head .center{text-align:center}
 .icon-pick{width:36px;height:36px;padding:0;justify-content:center;cursor:pointer}
 .icon-field.compact{display:block}
 .link-row-head{font-weight:600;text-transform:uppercase;letter-spacing:.03em;font-size:11px}
@@ -394,5 +398,68 @@ dialog.link-modal{width:min(620px,calc(100vw - 32px))}
   background:var(--panel-2);color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace;cursor:help;user-select:none}
 .link-resolved{font-size:12px;color:var(--primary);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .link-resolved:empty{display:none}
-.link-row .link-field{flex-wrap:wrap}.link-row .link-resolved{flex-basis:100%;margin-top:0}
+
 .hp-sitelink{display:inline-flex!important;align-items:center;justify-content:center;color:var(--text)}
+
+/* a chosen page, post or blog shows as a chip instead of its reference (page:12) */
+.link-chip{display:none;flex:1;min-width:0;align-items:center;gap:6px;height:36px;padding:0 4px 0 10px;border:1px solid color-mix(in srgb,var(--primary) 45%,var(--border));
+  border-radius:6px;background:var(--focus);color:var(--primary);font-size:13px;font-weight:600}
+.link-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.link-chip button{border:0;background:none;padding:2px 6px;color:inherit;font-size:12px}
+.link-chip.missing{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,var(--border));background:color-mix(in srgb,var(--danger) 8%,var(--panel))}
+.link-field.has-ref .link-chip{display:inline-flex}
+.link-field.has-ref input{display:none}
+.link-chip.draft{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,var(--border));background:color-mix(in srgb,var(--warn) 9%,var(--panel))}
+
+/* ---- text block editor: our toolbar, and content that looks like the site's text */
+.md-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:4px;border:1px solid var(--border);border-bottom:0;border-radius:8px 8px 0 0;background:var(--panel-2)}
+.md-toolbar .hp-select{width:auto;min-width:118px}
+.md-toolbar .hp-select-button{min-height:30px;padding:4px 8px;font-size:13px;border-color:transparent;background:transparent}
+.md-toolbar .hp-select-button:hover{background:var(--panel)}
+.md-tool{width:30px;height:30px;padding:0;justify-content:center;border:1px solid transparent;background:transparent;color:var(--text);border-radius:6px;font-weight:600;font-size:14px}
+.md-tool:hover{background:var(--panel);border-color:var(--border)}
+.md-tool.on{background:var(--focus);color:var(--primary);border-color:color-mix(in srgb,var(--primary) 35%,transparent)}
+.md-tool svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.md-tool b{font-weight:800}.md-tool i{font-family:Georgia,serif;font-size:15px}
+.md-sep{width:1px;height:18px;background:var(--border);margin:0 3px}
+.md-bar{margin-bottom:6px}
+.md-wrap .toastui-editor-toolbar{display:none}
+.md-wrap .toastui-editor-defaultUI{border-radius:0 0 8px 8px;border-color:var(--border);background:var(--panel)}
+.md-wrap:focus-within .toastui-editor-defaultUI,.md-wrap:focus-within .md-toolbar{border-color:color-mix(in srgb,var(--primary) 55%,var(--border))}
+.md-wrap .toastui-editor-main{border-radius:0 0 8px 8px}
+/* Markdown mode: no preview pane (the canvas is the preview) */
+.md-wrap .toastui-editor-md-splitter,.md-wrap .toastui-editor-md-preview{display:none!important}
+.md-wrap .toastui-editor-md-container .toastui-editor{width:100%!important}
+.md-wrap .toastui-editor-md-tab-container{display:none}
+/* the text itself */
+.md-wrap .toastui-editor-contents,.md-wrap .ProseMirror{font-family:inherit;font-size:14.5px;line-height:1.65;color:var(--text)}
+.md-wrap .toastui-editor-contents h1,.md-wrap .toastui-editor-contents h2,.md-wrap .toastui-editor-contents h3,.md-wrap .toastui-editor-contents h4{
+  border:0;padding:0;margin:.9em 0 .35em;line-height:1.25;color:var(--text);font-weight:700;letter-spacing:-.01em}
+.md-wrap .toastui-editor-contents h1{font-size:1.6em}.md-wrap .toastui-editor-contents h2{font-size:1.35em}
+.md-wrap .toastui-editor-contents h3{font-size:1.15em}.md-wrap .toastui-editor-contents h4{font-size:1em}
+.md-wrap .toastui-editor-contents>*:first-child{margin-top:0}
+.md-wrap .toastui-editor-contents p{margin:.5em 0;color:var(--text)}
+.md-wrap .toastui-editor-contents a{color:var(--primary)}
+.md-wrap .toastui-editor-contents blockquote{border-left:3px solid var(--primary);color:var(--muted);margin:.7em 0;padding:.1em 0 .1em .9em}
+.md-wrap .toastui-editor-contents blockquote p{color:inherit}
+.md-wrap .toastui-editor-contents ul>li::before{background-color:var(--muted)}
+.md-wrap .toastui-editor-contents code{background:var(--panel-2);color:var(--text);border-radius:4px;padding:.1em .35em}
+.md-wrap .toastui-editor-contents pre{background:var(--panel-2);border-radius:6px}
+.md-wrap .toastui-editor-contents table{border-collapse:collapse;margin:.7em 0}
+.md-wrap .toastui-editor-defaultUI .toastui-editor-contents table th,.md-wrap .toastui-editor-dark .toastui-editor-contents table th{background:var(--panel-2);color:var(--text);text-transform:none;letter-spacing:0;font-size:inherit;border-color:var(--border)}
+.md-wrap .toastui-editor-defaultUI .toastui-editor-contents table td,.md-wrap .toastui-editor-dark .toastui-editor-contents table td{border-color:var(--border);color:var(--text)}
+.md-wrap .toastui-editor-contents tr:hover td{background:none}
+.md-wrap .toastui-editor-ww-container,.md-wrap .toastui-editor-md-container{background:var(--panel)}
+.md-wrap .toastui-editor-md-container .ProseMirror{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+.md-wrap[data-align="center"] .ProseMirror{text-align:center}.md-wrap[data-align="right"] .ProseMirror{text-align:right}
+.md-wrap[data-align="justify"] .ww-mode .ProseMirror,.md-wrap[data-align="justify"] .toastui-editor-ww-container .ProseMirror{text-align:justify}
+.md-wrap .toastui-editor-defaultUI .ProseMirror{padding:12px 14px;min-height:240px}
+.md-wrap .placeholder{color:var(--muted)}
+/* the link dialog's part for text blocks */
+.link-external{border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:6px}
+.link-external label{margin-top:0}
+.link-external-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
+.link-or{margin-top:10px}
+/* a little more room for the inspector on wide screens */
+@media (min-width:1280px){.ed-main{grid-template-columns:250px 1fr 380px}}
+.link-external:not([hidden]) ~ .help [data-link-field-help]{display:none}

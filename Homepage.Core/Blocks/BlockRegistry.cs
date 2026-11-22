@@ -32,14 +32,19 @@ public static class BlockRegistry
     private static readonly string[] Content =
         ["heading", "markdown", "image", "button", "quote", "spacer", "divider", "html", "postlist", "menu"];
 
+    /// <summary>What layout containers (column, group, site bar) hold: every block but sections and site bars.</summary>
+    private static readonly string[] Inner = [.. Content, "columns", "group", "sitebrand"];
+
     public static readonly IReadOnlyList<BlockDefinition> All =
     [
         new("section", "Section", BlockCategory.Layout, typeof(SectionProps), "▭", IsContainer: true,
-            AllowedChildren: [.. Content, "columns", "sitebar", "sitebrand"], AllowedParents: [""]),
+            AllowedChildren: [.. Inner, "sitebar"], AllowedParents: [""]),
         new("columns", "Columns", BlockCategory.Layout, typeof(ColumnsProps), "▥", IsContainer: true,
             AllowedChildren: ["column"]),
         new("column", "Column", BlockCategory.Layout, typeof(ColumnProps), "▯", IsContainer: true,
-            AllowedChildren: Content, AllowedParents: ["columns"]),
+            AllowedChildren: Inner, AllowedParents: ["columns"]),
+        new("group", "Group (row or stack)", BlockCategory.Layout, typeof(GroupProps), "⊞", IsContainer: true,
+            AllowedChildren: Inner),
         new("heading", "Heading", BlockCategory.Content, typeof(HeadingProps), "H"),
         new("markdown", "Text (Markdown)", BlockCategory.Content, typeof(MarkdownProps), "¶"),
         new("image", "Image", BlockCategory.Content, typeof(ImageProps), "▣"),
@@ -51,7 +56,7 @@ public static class BlockRegistry
         new("postlist", "Latest posts", BlockCategory.Dynamic, typeof(PostListProps), "☰"),
         new("menu", "Menu", BlockCategory.Site, typeof(MenuProps), "≡"),
         new("sitebar", "Site bar", BlockCategory.Site, typeof(SiteBarProps), "▤", IsContainer: true,
-            AllowedChildren: ["sitebrand", "menu", "button", "spacer", "markdown", "html"],
+            AllowedChildren: Inner,
             AllowedParents: ["", "section"], OnlyIn: [TreeKind.Header, TreeKind.Footer]),
         new("sitebrand", "Logo / site name", BlockCategory.Site, typeof(SiteBrandProps), "⌂",
             OnlyIn: [TreeKind.Header, TreeKind.Footer]),

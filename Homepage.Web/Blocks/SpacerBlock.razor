@@ -1,4 +1,5 @@
-<div class="spacer-@Css.Spacing(Node.PropsAs<SpacerProps>().Size)" aria-hidden="true"></div>
+@{ var p = Node.PropsAs<SpacerProps>(); }
+<div class="spacer spacer-@Css.Spacing(p.Size) @(p.Grow ? "spacer-grow" : null)" aria-hidden="true"></div>
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
 }

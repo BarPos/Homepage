@@ -1,5 +1,5 @@
 @{ var p = Node.PropsAs<QuoteProps>(); }
-<blockquote class="blk quote">
+<blockquote class="blk quote @Css.Align(p.Align)">
     <p>@p.Text</p>
     @if (!string.IsNullOrWhiteSpace(p.Cite)) { <cite>— @p.Cite</cite> }
 </blockquote>

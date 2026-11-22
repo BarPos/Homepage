@@ -1,4 +1,5 @@
-<div class="col">
+@{ var p = Node.PropsAs<ColumnProps>(); }
+<div class="col @Css.Align(p.Align) col-@Css.VAlign(p.VerticalAlign) @Css.OptionalBackground(p.Background) pad-box-@Css.Spacing(p.Padding)">
     <BlockList Nodes="Node.Children" ParentId="@Node.Id" />
 </div>
 @code {

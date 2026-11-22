@@ -1,9 +1,21 @@
 @* Chooser for links: pages, blogs and posts of this site. Open with <button data-open-dialog="link-dialog" data-link-for="input id">. *@
 <dialog id="link-dialog" class="modal link-modal" aria-labelledby="link-dialog-title" data-light-dismiss>
     <h2 id="link-dialog-title">Link to a page, blog or post</h2>
+    @* Text blocks only: link text, any address, new tab. Hidden for buttons and menus (their fields take an address). *@
+    <div class="link-external" data-link-external hidden>
+        <div class="form-row">
+            <div><label for="lx-text">Link text</label><input id="lx-text" type="text" data-link-external-text placeholder="The words to click" /></div>
+            <div><label for="lx-url">Address</label><input id="lx-url" type="text" data-link-external-url placeholder="https://… or /page" /></div>
+        </div>
+        <div class="link-external-actions">
+            <label class="inline"><input type="checkbox" data-link-external-newtab /> Open in a new tab</label>
+            <button type="button" class="btn-primary btn-sm" data-link-external-add>Add link</button>
+        </div>
+        <div class="link-or muted small">or choose a page, blog or post:</div>
+    </div>
     <input type="search" name="q" placeholder="Search titles and addresses…" autocomplete="off" aria-label="Search pages, blogs and posts"
            hx-get="/admin/editor/links" hx-trigger="input changed delay:200ms, load" hx-target="#link-results" hx-swap="innerHTML" />
     <div id="link-results" class="link-results" role="listbox" aria-label="Pages, blogs and posts"></div>
-    <p class="help">The link follows the page when it is renamed or moved. For a link to another site, close this and type the address (https://…) in the field.</p>
+    <p class="help">The link follows the page when it is renamed or moved.<span data-link-field-help> For a link to another site, close this and type the address (https://…) in the field.</span></p>
     <div class="modal-actions"><button type="button" data-close-dialog>Close</button></div>
 </dialog>

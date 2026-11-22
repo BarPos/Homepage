@@ -1,11 +1,18 @@
-@{ var p = Node.PropsAs<HeadingProps>(); var cls = "blk " + Css.Align(p.Align); }
+@{
+    var p = Node.PropsAs<HeadingProps>();
+    var cls = "blk " + Css.Align(p.Align) + (Icons.Get(p.Icon) is not null ? " has-icon" : "");
+    var href = string.IsNullOrWhiteSpace(p.Url) || !SafeUrlAttribute.IsSafe(p.Url) ? null : Ctx.Href(p.Url);
+    RenderFragment inner = @<text>@if (Icons.Get(p.Icon) is { } icon) { @((MarkupString)Icons.Svg(icon, "heading-icon")) }<span>@p.Text</span></text>;
+    RenderFragment content = href is null ? inner : @<a class="heading-link" href="@href">@inner</a>;
+}
 @switch (Math.Clamp(p.Level, 1, 4))
 {
-    case 1: <h1 class="@cls">@p.Text</h1> break;
-    case 2: <h2 class="@cls">@p.Text</h2> break;
-    case 3: <h3 class="@cls">@p.Text</h3> break;
-    default: <h4 class="@cls">@p.Text</h4> break;
+    case 1: <h1 class="@cls">@content</h1> break;
+    case 2: <h2 class="@cls">@content</h2> break;
+    case 3: <h3 class="@cls">@content</h3> break;
+    default: <h4 class="@cls">@content</h4> break;
 }
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
 }

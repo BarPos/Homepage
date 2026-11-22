@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Net;
 using System.Text.RegularExpressions;
 using Homepage.Accounts;
@@ -37,6 +38,49 @@ public class PageUnitTests
         var def = BlockRegistry.Get("button")!;
         Assert.Empty(BlockValidator.ValidateProps(def, BlockOps.ToJson(new ButtonProps { Text = "Go", Url = "/", Icon = "solid:house" })));
         Assert.NotEmpty(BlockValidator.ValidateProps(def, BlockOps.ToJson(new ButtonProps { Text = "Go", Url = "/", Icon = "solid:no-such-icon" })));
+    }
+
+    [Fact]
+    public void LayoutBlocksNestMoreFreely()
+    {
+        var bar = BlockRegistry.Get("sitebar")!;
+        foreach (var t in new[] { "columns", "group", "heading", "image", "divider", "quote", "menu", "sitebrand", "button" })
+            Assert.True(bar.AllowsChild(t), t);
+        Assert.False(bar.AllowsChild("section"));
+        Assert.False(bar.AllowsChild("sitebar"));
+        var column = BlockRegistry.Get("column")!;
+        Assert.True(column.AllowsChild("columns")); // columns in columns
+        Assert.True(column.AllowsChild("group"));
+        Assert.True(column.AllowsChild("sitebrand"));
+        var group = BlockRegistry.Get("group")!;
+        Assert.True(group.AllowsChild("group"));
+        Assert.True(group.AllowedUnder("sitebar"));
+        Assert.True(BlockRegistry.Get("columns")!.AllowedUnder("sitebar"));
+        // a header with a site bar holding columns with a group inside validates
+        var tree = new BlockTree { Blocks = [new BlockNode { Type = "sitebar", Props = BlockOps.ToJson(new SiteBarProps()), Children =
+            [new BlockNode { Type = "columns", Props = BlockOps.ToJson(new ColumnsProps()), Children =
+                [new BlockNode { Type = "column", Props = BlockOps.ToJson(new ColumnProps()), Children =
+                    [new BlockNode { Type = "group", Props = BlockOps.ToJson(new GroupProps()), Children =
+                        [new BlockNode { Type = "sitebrand", Props = BlockOps.ToJson(new SiteBrandProps()) },
+                         new BlockNode { Type = "menu", Props = BlockOps.ToJson(new MenuProps { Orientation = Orientation.Vertical, Collapse = true }) }] }] }] }] }] };
+        Assert.Empty(BlockValidator.Validate(tree, TreeKind.Header));
+        // an optional background color may be empty; a mandatory one may not
+        Assert.Empty(BlockValidator.ValidateProps(BlockRegistry.Get("column")!, BlockOps.ToJson(new ColumnProps { Background = "" })));
+        Assert.NotEmpty(BlockValidator.ValidateProps(BlockRegistry.Get("section")!, BlockOps.ToJson(new SectionProps { Background = "" })));
+    }
+
+    [Fact]
+    public void SavingKeepsSettingsTheFormDoesNotSend()
+    {
+        var def = BlockRegistry.Get("button")!;
+        var current = BlockOps.ToJson(new ButtonProps { Text = "Old", Size = ButtonSize.Large, FullWidth = true, Icon = "solid:house" });
+        var form = new Dictionary<string, string> { ["p.Text"] = "New", ["p.Url"] = "/" };
+        var bound = BlockPropsBinder.Bind(def, k => form.GetValueOrDefault(k), current);
+        var props = bound.Deserialize<ButtonProps>(BlockTree.Json)!;
+        Assert.Equal(("New", ButtonSize.Large, true, "solid:house"), (props.Text, props.Size, props.FullWidth, props.Icon));
+        // without current settings, missing fields get their defaults
+        var fresh = BlockPropsBinder.Bind(def, k => form.GetValueOrDefault(k)).Deserialize<ButtonProps>(BlockTree.Json)!;
+        Assert.Equal((ButtonSize.Medium, false), (fresh.Size, fresh.FullWidth));
     }
 
     [Fact]
@@ -337,7 +381,7 @@ public sealed class PagesHttpTests(PostgresFixture pg)
             Assert.Equal(HttpStatusCode.NoContent, await Props("brands:github"));
             await client.PostAsync($"/admin/content/{about}/publish", Form(("__RequestVerificationToken", token)));
             var aboutHtml = await client.GetStringAsync("/about");
-            Assert.Matches("<a class=\"btn btn-primary\" href=\"https://github.com\" target=\"_blank\" rel=\"noopener noreferrer\">\\s*<span>GitHub</span>\\s*<svg class=\"btn-icon\"", aboutHtml);
+            Assert.Matches("<a class=\"btn btn-primary btn-medium\\s*\" href=\"https://github.com\" target=\"_blank\" rel=\"noopener noreferrer\">\\s*<span>GitHub</span>\\s*<svg class=\"btn-icon\"", aboutHtml);
             Assert.Contains("(opens in a new tab)", aboutHtml);
             Assert.Contains("data-icon-value=\"solid:house\"", await client.GetStringAsync("/admin/editor/icons?q=house"));
 
@@ -435,6 +479,41 @@ public sealed class PagesHttpTests(PostgresFixture pg)
             Assert.DoesNotContain("/about/careers", await client.GetStringAsync("/about"));
             Assert.Contains("/about/careers", await client.GetStringAsync($"/admin/editor/content-{about}/canvas")); // the editor still shows it
             await client.PostAsync($"/admin/content/{jobs}/publish", Form(("__RequestVerificationToken", token)));
+            // new layout options reach the page
+            var lay = new HttpRequestMessage(HttpMethod.Post, $"/admin/editor/content-{about}/ops")
+            {
+                Content = new StringContent("""{"op":"insert","type":"group","parentId":null,"index":0}""", System.Text.Encoding.UTF8, "application/json"),
+            };
+            lay.Headers.Add("RequestVerificationToken", token);
+            lay.Headers.Add("Accept", "application/json");
+            var groupId2 = Regex.Match(await (await client.SendAsync(lay)).Content.ReadAsStringAsync(), "\"newId\":\"([^\"]+)\"").Groups[1].Value;
+            async Task<string> Insert(string type, string parent)
+            {
+                var r = new HttpRequestMessage(HttpMethod.Post, $"/admin/editor/content-{about}/ops")
+                {
+                    Content = new StringContent($$"""{"op":"insert","type":"{{type}}","parentId":"{{parent}}","index":0}""", System.Text.Encoding.UTF8, "application/json"),
+                };
+                r.Headers.Add("RequestVerificationToken", token);
+                r.Headers.Add("Accept", "application/json");
+                return Regex.Match(await (await client.SendAsync(r)).Content.ReadAsStringAsync(), "\"newId\":\"([^\"]+)\"").Groups[1].Value;
+            }
+            async Task SetProps(string id, params (string, string)[] f)
+            {
+                var r = new HttpRequestMessage(HttpMethod.Post, $"/admin/editor/content-{about}/props/{id}") { Content = Form(f) };
+                r.Headers.Add("RequestVerificationToken", token);
+                r.Headers.Add("HX-Request", "true");
+                Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(r)).StatusCode);
+            }
+            var menuInGroup = await Insert("menu", groupId2);
+            await SetProps(menuInGroup, ("p.MenuKey", "main"), ("p.Orientation", "Vertical"), ("p.Look", "Pills"), ("p.Collapse", "true"));
+            await SetProps(groupId2, ("p.Direction", "Vertical"), ("p.Justify", "Center"), ("p.Background", "surface"));
+            await client.PostAsync($"/admin/content/{about}/publish", Form(("__RequestVerificationToken", token)));
+            var laidOut = await client.GetStringAsync("/about");
+            Assert.Contains("grp grp-col justify-center", laidOut);
+            Assert.Contains("bg-surface has-bg", laidOut);
+            Assert.Contains("menu menu-vertical look-pills", laidOut);
+            Assert.Contains("<details class=\"menu-fold\">", laidOut);
+
             // menus too
             await client.PostAsync("/admin/menus/footer", Form(("__RequestVerificationToken", token), ("name", "Footer menu"),
                 ("icon", ""), ("label", "Careers"), ("url", $"page:{jobs}"), ("newTab", "false")));

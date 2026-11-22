@@ -6,7 +6,7 @@
 }
 else
 {
-    <div class="blk prose">@((MarkupString)Markdown.ToHtml(p.Markdown, Ctx.Href))</div>
+    <div class="blk prose @Css.Align(p.Align)">@((MarkupString)Markdown.ToHtml(p.Markdown, Ctx.Href))</div>
 }
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;

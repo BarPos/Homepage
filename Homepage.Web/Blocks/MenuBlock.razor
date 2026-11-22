@@ -1,19 +1,36 @@
 @inject MenuService Menus
-@{ var p = Node.PropsAs<MenuProps>(); }
-<nav class="blk" aria-label="Menu">
-    <ul class="menu @Css.Align(p.Align)">
-        @foreach (var link in _links)
-        {
-            var icon = Icons.Get(link.Icon);
-            var href = Ctx.Href(link.Url);
-            if (href is null) continue; // the page it pointed at is gone or not published
-            <li><a href="@href" target="@(link.NewTab ? "_blank" : null)" rel="@(link.NewTab ? "noopener noreferrer" : null)">@if (icon is not null) { @((MarkupString)Icons.Svg(icon, "menu-icon")) }<span>@link.Label</span>@if (link.NewTab) { <span class="sr-only"> (opens in a new tab)</span> }</a></li>
-        }
-    </ul>
+@{
+    var p = Node.PropsAs<MenuProps>();
+    var list = $"menu menu-{(p.Orientation == Orientation.Vertical ? "vertical" : "horizontal")} look-{p.Look.ToString().ToLowerInvariant()} gap-{Css.Spacing(p.Gap)} {Css.Align(p.Align)}";
+}
+<nav class="blk menu-nav @(p.Collapse ? "menu-collapsible" : null)" aria-label="Menu">
+    @if (p.Collapse)
+    {
+        @* On small screens the list folds into a ☰ button (details/summary: no script needed). *@
+        <details class="menu-fold">
+            <summary aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></summary>
+            <ul class="menu menu-vertical look-@p.Look.ToString().ToLowerInvariant() gap-@Css.Spacing(p.Gap)">@Items</ul>
+        </details>
+    }
+    <ul class="@list @(p.Collapse ? "menu-wide" : null)">@Items</ul>
 </nav>
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
     [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
     private IReadOnlyList<MenuLink> _links = [];
     protected override async Task OnInitializedAsync() => _links = await Menus.GetLinksAsync(Node.PropsAs<MenuProps>().MenuKey);
+
+    private RenderFragment Items => __builder =>
+    {
+        foreach (var link in _links)
+        {
+            var icon = Icons.Get(link.Icon);
+            var href = Ctx.Href(link.Url);
+            if (href is null) continue; // the page it pointed at is gone or not published
+            // In the editor, links to unpublished pages show (dashed) so you can see why visitors don't get them.
+            var draft = Ctx.Edit && Ctx.Links is { } m && SafeUrlAttribute.TryParseReference(link.Url, out _, out _) && m.Href(link.Url, publishedOnly: true) is null;
+            <li><a href="@href" class="@(draft ? "hp-draft-link" : null)" title="@(draft ? "Not shown on the site: the page it links to is not published" : null)"
+                   target="@(link.NewTab ? "_blank" : null)" rel="@(link.NewTab ? "noopener noreferrer" : null)">@if (icon is not null) { @((MarkupString)Icons.Svg(icon, "menu-icon")) }<span>@link.Label</span>@if (link.NewTab) { <span class="sr-only"> (opens in a new tab)</span> }</a></li>
+        }
+    };
 }

@@ -1,9 +1,23 @@
-@{ var p = Node.PropsAs<SectionProps>(); }
-<section class="sec sec-@p.Variant.ToString().ToLowerInvariant() pad-@Css.Spacing(p.Padding) @Css.Background(p.Background)">
+@inject PublicContent Content
+@{
+    var p = Node.PropsAs<SectionProps>();
+    var cls = $"sec sec-{p.Variant.ToString().ToLowerInvariant()} pad-{Css.Spacing(p.Padding)} {Css.Background(p.Background)} {Css.Width(p.Width)} {Css.Align(p.Align)}"
+              + (p.MinHeight != MinHeight.Auto ? $" min-h-{Css.Kebab(p.MinHeight)} {Css.VAlign(p.VerticalAlign)}" : "")
+              + (_image is not null ? " has-image" : "");
+    var style = _image is null ? null
+        : $"--sec-image:url('{_image}');--sec-overlay:{(Math.Clamp(p.Overlay, 0, 90) / 100.0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}";
+}
+<section class="@cls" style="@style">
     <div class="container">
         <BlockList Nodes="Node.Children" ParentId="@Node.Id" />
     </div>
 </section>
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    private string? _image;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Node.PropsAs<SectionProps>().BackgroundMediaId is { } id) _image = await Content.MediaUrlAsync(id);
+    }
 }

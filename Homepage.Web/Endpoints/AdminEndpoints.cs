@@ -378,7 +378,7 @@ public static class AdminEndpoints
             var doc = await content.LoadDocumentAsync(a.Perms, t);
             var node = doc.Tree.Find(blockId) ?? throw new NotFoundException("The block no longer exists.");
             var def = BlockRegistry.Get(node.Type) ?? throw new BlockException("Unknown blocks cannot be edited.");
-            var props = BlockPropsBinder.Bind(def, name => form[name].LastOrDefault());
+            var props = BlockPropsBinder.Bind(def, name => form.ContainsKey(name) ? form[name].LastOrDefault() : null, node.Props);
             var (_, change, _) = await content.ApplyAsync(a.Perms, t, ops => Do(() => ops.Update(blockId, props)), a.Actor);
             if (change.AffectsSite) { themes.Invalidate(); await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default); }
             http.Response.Headers["HX-Trigger"] = "hp-changed";
@@ -721,7 +721,7 @@ public static class AdminEndpoints
             void Choice(string reference, string url, string title, string? badge)
             {
                 var u = System.Net.WebUtility.HtmlEncode(url);
-                var label = System.Net.WebUtility.HtmlEncode($"{title} · {url}");
+                var label = System.Net.WebUtility.HtmlEncode($"{title} · {url}{(badge == "draft" ? " · draft: hidden on the site until published" : "")}");
                 sb.Append("<button type=\"button\" class=\"link-choice\" role=\"option\" data-link-value=\"").Append(reference)
                   .Append("\" data-link-label=\"").Append(label).Append("\" data-link-title=\"").Append(System.Net.WebUtility.HtmlEncode(title)).Append("\"><strong>")
                   .Append(System.Net.WebUtility.HtmlEncode(title)).Append("</strong><code>").Append(u).Append("</code>");

@@ -7,9 +7,9 @@
 }
 @* A link to a page that is gone or unpublished: no button on the public site; a note in the editor. *@
 @{ if (href is null && !Ctx.Edit) return; }
-<p class="blk @Css.Align(p.Align)">
+<p class="blk @Css.Align(p.Align) @(p.FullWidth ? "btn-block" : null)">
     @if (href is null) { <span class="hp-missing-link">The page this button links to is gone. Choose another link.</span> }
-    <a class="btn btn-@p.Style.ToString().ToLowerInvariant()" href="@(href ?? "#")" target="@(p.NewTab ? "_blank" : null)" rel="@(p.NewTab ? "noopener noreferrer" : null)">
+    <a class="btn btn-@p.Style.ToString().ToLowerInvariant() btn-@Css.Kebab(p.Size) @(DraftTarget ? "hp-draft-link" : null)" href="@(href ?? "#")" title="@(DraftTarget ? "Not shown on the site: the page it links to is not published" : null)" target="@(p.NewTab ? "_blank" : null)" rel="@(p.NewTab ? "noopener noreferrer" : null)">
         @if (!after) { @IconMarkup(icon) }
         <span>@p.Text</span>
         @if (after) { @IconMarkup(icon) }
@@ -20,6 +20,9 @@
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
     [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
     private string? _iconUrl;
+    /// <summary>In the editor: the button links to something that is not published, so visitors do not see it.</summary>
+    private bool DraftTarget => Ctx.Edit && Ctx.Links is { } m && SafeUrlAttribute.TryParseReference(Node.PropsAs<ButtonProps>().Url, out _, out _)
+                                && m.Href(Node.PropsAs<ButtonProps>().Url, publishedOnly: true) is null;
 
     protected override async Task OnInitializedAsync()
     {

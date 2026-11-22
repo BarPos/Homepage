@@ -34,7 +34,7 @@
         </div>
         <h2 class="card-title" style="margin-top:20px">Links</h2>
         <div class="link-rows">
-            <div class="link-row link-row-head muted small" x-show="rows.length"><span>Icon</span><span>Label</span><span>Link</span><span title="Open in a new tab">New tab</span><span></span></div>
+            <div class="link-row link-row-head muted small" x-show="rows.length"><span>Icon</span><span>Label</span><span>Link</span><span class="center" title="Open in a new tab">New tab</span><span></span></div>
             <template x-for="(row, i) in rows" :key="row.id">
                 <div class="link-row">
                     <span class="icon-field compact">
@@ -43,10 +43,14 @@
                         <input type="hidden" name="icon" x-bind:id="'icon-' + row.id" x-model="row.icon" x-on:hp-icon="row.svg = $event.detail.svg" />
                     </span>
                     <input type="text" name="label" x-model="row.label" placeholder="Label" aria-label="Label" maxlength="100" />
-                    <span class="link-field" data-url-field>
+                    <span class="link-field" data-url-field x-bind:class="/^(page|post|blog):\d+$/.test(row.url) && 'has-ref'"
+                          x-on:hp-link.window="if ($event.detail.id === 'url-' + row.id) row.target = $event.detail.label">
+                        <span class="link-chip" x-bind:class="row.target.startsWith('⚠') ? 'missing' : row.target.includes('draft:') ? 'draft' : ''" x-bind:title="row.target">
+                            <span x-text="row.target.replace(/^→ /, '')"></span>
+                            <button type="button" x-on:click="row.url = ''; row.target = ''; $nextTick(() => $el.closest('.link-field').querySelector('input').focus())" title="Remove the link" aria-label="Remove the link">✕</button>
+                        </span>
                         <input type="text" name="url" x-bind:id="'url-' + row.id" x-model="row.url" placeholder="/page or https://…" aria-label="Link" maxlength="1000" />
                         <button type="button" class="btn-sm" data-open-dialog="link-dialog" x-bind:data-link-for="'url-' + row.id" title="Choose a page, blog or post">Choose…</button>
-                        <span class="link-resolved" x-show="row.target" x-text="row.target" x-on:hp-link.window="if ($event.detail.id === 'url-' + row.id) row.target = $event.detail.label"></span>
                     </span>
                     <label class="inline new-tab" title="Open in a new tab">
                         <input type="hidden" name="newTab" x-bind:value="row.newTab ? 'true' : 'false'" />
@@ -63,7 +67,7 @@
             <p class="muted" x-show="!rows.length">No links yet.</p>
         </div>
         <div class="form-actions spread">
-            <button type="button" x-on:click="rows.push({ id: Date.now() + Math.random(), label: '', url: '', icon: '', svg: '', newTab: false }); $nextTick(() => $root.querySelectorAll('input[name=label]')[rows.length - 1]?.focus())">+ Add link</button>
+            <button type="button" x-on:click="rows.push({ id: Date.now() + Math.random(), label: '', url: '', icon: '', svg: '', newTab: false, target: '' }); $nextTick(() => $root.querySelectorAll('input[name=label]')[rows.length - 1]?.focus())">+ Add link</button>
             <span>
                 <a class="btn" href="/admin/menus">Cancel</a>
                 <button class="btn-primary">@(isNew ? "Create menu" : "Save menu")</button>
@@ -100,7 +104,8 @@
         System.Text.Json.JsonSerializer.Serialize(Links.Select((l, i) => new
         {
             id = i, label = l.Label, url = l.Url, icon = l.Icon ?? "", newTab = l.NewTab,
-            target = Map?.Describe(l.Url) is { } d ? $"→ {d.Title} · {d.Path}" : SafeUrlAttribute.TryParseReference(l.Url, out _, out _) ? "⚠ The linked page no longer exists" : "",
+            target = Map?.Describe(l.Url) is { } d ? $"→ {d.Title} · {d.Path}{(d.Published ? "" : " · draft: hidden on the site until published")}"
+                : SafeUrlAttribute.TryParseReference(l.Url, out _, out _) ? "⚠ The linked page no longer exists" : "",
             svg = Icons.Get(l.Icon) is { } ic ? Icons.Svg(ic) : "",
         }));
 }

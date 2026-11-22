@@ -1,6 +1,10 @@
 @inject PublicContent Content
-@{ var p = Node.PropsAs<ImageProps>(); }
-<div class="blk img img-@p.Width.ToString().ToLowerInvariant()">
+@{
+    var p = Node.PropsAs<ImageProps>();
+    var href = string.IsNullOrWhiteSpace(p.Url) || !SafeUrlAttribute.IsSafe(p.Url) ? null : Ctx.Href(p.Url);
+    var style = p.MaxWidth > 0 ? $"max-width:{Math.Clamp(p.MaxWidth, 1, 4000)}px" : null;
+}
+<div class="blk img img-@p.Width.ToString().ToLowerInvariant() img-@Css.Align(p.Align) shape-@p.Shape.ToString().ToLowerInvariant()" style="@style">
     @if (_url is null)
     {
         @if (Ctx.Edit) { <div class="img-placeholder">Choose an image in the panel on the right</div> }
@@ -8,7 +12,14 @@
     else
     {
         <figure>
-            <img src="@_url" alt="@p.Alt" loading="lazy" />
+            @if (href is not null)
+            {
+                <a href="@href" target="@(p.NewTab ? "_blank" : null)" rel="@(p.NewTab ? "noopener noreferrer" : null)"><img src="@_url" alt="@p.Alt" loading="lazy" /></a>
+            }
+            else
+            {
+                <img src="@_url" alt="@p.Alt" loading="lazy" />
+            }
             @if (!string.IsNullOrWhiteSpace(p.Caption)) { <figcaption>@p.Caption</figcaption> }
         </figure>
     }

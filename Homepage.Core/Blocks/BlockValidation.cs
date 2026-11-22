@@ -15,7 +15,7 @@ public sealed class BlockException(string message) : Exception(message);
 public static partial class BlockValidator
 {
     public const int MaxNodes = 1000;
-    public const int MaxDepth = 6;
+    public const int MaxDepth = 10;
 
     [GeneratedRegex("^[A-Za-z0-9_-]{1,40}$")]
     private static partial Regex IdRegex();
@@ -57,7 +57,7 @@ public static partial class BlockValidator
         Validator.TryValidateObject(model, new ValidationContext(model), results, validateAllProperties: true);
         var errors = results.Select(r => $"'{def.Label}': {r.ErrorMessage}").ToList();
         foreach (var p in def.PropsType.GetProperties().Where(p => p.GetCustomAttribute<ThemeColorAttribute>() is not null))
-            if (p.GetValue(model) is string s && !ThemeTokens.ColorNames.Contains(s))
+            if (p.GetValue(model) is string s && !ThemeTokens.ColorNames.Contains(s) && !(s.Length == 0 && p.GetCustomAttribute<ThemeColorAttribute>()!.AllowNone))
                 errors.Add($"'{def.Label}': unknown color '{s}'.");
         return errors;
     }
@@ -66,13 +66,21 @@ public static partial class BlockValidator
 /// <summary>Turns inspector form values (<c>p.PropertyName</c>) into a props object for a block type.</summary>
 public static class BlockPropsBinder
 {
-    public static JsonObject Bind(BlockDefinition def, Func<string, string?> form)
+    /// <param name="current">The block's current settings: a field the form does not send keeps its value (an editor
+    /// opened before a new setting existed, or a partial form). Without it, missing fields get their defaults.</param>
+    public static JsonObject Bind(BlockDefinition def, Func<string, string?> form, JsonObject? current = null)
     {
         var obj = new JsonObject();
+        var defaults = JsonSerializer.SerializeToNode(def.CreateDefaultProps(), def.PropsType, BlockTree.Json) as JsonObject;
         foreach (var p in def.PropsType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             var name = JsonNamingPolicy.CamelCase.ConvertName(p.Name);
             var raw = form("p." + p.Name);
+            if (raw is null)
+            {
+                obj[name] = (current?[name] ?? defaults?[name])?.DeepClone();
+                continue;
+            }
             var t = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
             if (t == typeof(bool))
             {

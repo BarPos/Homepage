@@ -100,21 +100,43 @@
   let linkTarget = null;
   document.addEventListener("click", (e) => {
     const opener = e.target.closest && e.target.closest("[data-link-for]");
-    if (opener) { linkTarget = opener.dataset.linkFor; return; }
+    if (opener) {
+      linkTarget = opener.dataset.linkFor;
+      if (linkTarget !== "@markdown") document.querySelectorAll("[data-link-external]").forEach((el) => { el.hidden = true; });
+      return;
+    }
+    const add = e.target.closest && e.target.closest("[data-link-external-add]");
+    if (add && linkTarget === "@markdown" && typeof window.hpLinkPick === "function") {
+      const dlg = add.closest("dialog");
+      const url = (dlg.querySelector("[data-link-external-url]").value || "").trim();
+      if (!/^(https?:\/\/|mailto:|tel:|\/|#)/i.test(url)) { hpFlash("Enter an address that starts with https://, /, #, mailto: or tel:.", "error"); return; }
+      const text = (dlg.querySelector("[data-link-external-text]").value || "").trim();
+      const newTab = dlg.querySelector("[data-link-external-newtab]").checked;
+      dlg.close();
+      window.hpLinkPick(url, text, newTab);
+      return;
+    }
     const choice = e.target.closest && e.target.closest("[data-link-value]");
     if (!choice) return;
     const value = choice.dataset.linkValue, label = "→ " + choice.dataset.linkLabel;
     // The Markdown editor asks for a link through a callback instead of a field.
     if (linkTarget === "@markdown" && typeof window.hpLinkPick === "function") {
-      choice.closest("dialog")?.close();
-      window.hpLinkPick(value, choice.dataset.linkTitle || "");
+      const dlg = choice.closest("dialog");
+      const text = (dlg.querySelector("[data-link-external-text]")?.value || "").trim();
+      const newTab = !!dlg.querySelector("[data-link-external-newtab]")?.checked;
+      dlg.close();
+      window.hpLinkPick(value, text || choice.dataset.linkTitle || "", newTab);
       return;
     }
     const input = linkTarget && document.getElementById(linkTarget);
     if (!input) return;
     input.value = value;
     const shown = document.querySelector('[data-link-resolved="' + linkTarget + '"]');
-    if (shown) shown.textContent = label;
+    if (shown) shown.textContent = choice.dataset.linkLabel;
+    input.closest(".link-field")?.classList.add("has-ref");
+    const chip = input.closest(".link-field")?.querySelector(".link-chip");
+    chip?.classList.remove("missing");
+    chip?.classList.toggle("draft", (choice.dataset.linkLabel || "").includes("draft:"));
     window.dispatchEvent(new CustomEvent("hp-link", { detail: { id: linkTarget, value, label } }));
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
@@ -122,11 +144,17 @@
     input.focus();
   });
 
-  document.addEventListener("input", (e) => {
-    const id = e.target && e.target.id;
-    if (!id || e.isTrusted === false) return;
-    const shown = document.querySelector('[data-link-resolved="' + id + '"]');
-    if (shown && !/^(page|post|blog):\d+$/.test(e.target.value.trim())) shown.textContent = "";
+  // ✕ on a chosen link: back to an empty address field.
+  document.addEventListener("click", (e) => {
+    const clear = e.target.closest && e.target.closest("[data-link-clear]");
+    if (!clear) return;
+    const input = document.getElementById(clear.dataset.linkClear);
+    if (!input) return;
+    input.value = "";
+    input.closest(".link-field")?.classList.remove("has-ref");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    input.focus();
   });
 
   // Icon picker (inspector): a dialog of icons; choosing one fills the field and saves the block.

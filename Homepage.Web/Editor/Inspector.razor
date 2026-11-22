@@ -41,10 +41,11 @@ else
                     @foreach (var v in Enum.GetValues(t)) { <option value="@v" selected="@(Equals(v, value))">@Humanize(v.ToString()!)</option> }
                 </select>
             }
-            else if (p.GetCustomAttribute<ThemeColorAttribute>() is not null)
+            else if (p.GetCustomAttribute<ThemeColorAttribute>() is { } colorAttr)
             {
                 <label for="@id">@label</label>
                 <select id="@id" name="@name">
+                    @if (colorAttr.AllowNone) { <option value="" selected="@(string.IsNullOrEmpty(value as string))">None</option> }
                     @foreach (var c in ThemeTokens.AllColors.Where(c => ThemeTokens.ColorNames.Contains(c.Key)))
                     {
                         <option value="@c.Key" selected="@(c.Key == (string?)value)">@c.Label</option>
@@ -95,11 +96,15 @@ else
             {
                 _linkFields = true;
                 <label for="@id">@label</label>
-                <div class="link-field">
+                var linkLabel = LinkLabel(value as string);
+                <div class="link-field @(linkLabel.Length > 0 ? "has-ref" : null)">
+                    <span class="link-chip @(linkLabel.StartsWith('⚠') ? "missing" : linkLabel.Contains("draft:") ? "draft" : null)" title="@linkLabel">
+                        <span data-link-resolved="@id">@linkLabel.TrimStart('→', ' ')</span>
+                        <button type="button" data-link-clear="@id" title="Remove the link" aria-label="Remove the link">✕</button>
+                    </span>
                     <input id="@id" name="@name" type="text" value="@value" maxlength="@(p.GetCustomAttribute<StringLengthAttribute>()?.MaximumLength)" placeholder="/page or https://…" />
                     <button type="button" class="btn-sm" data-open-dialog="link-dialog" data-link-for="@id" title="Choose a page, blog or post">Choose…</button>
                 </div>
-                <div class="link-resolved" data-link-resolved="@id">@LinkLabel(value as string)</div>
                 <div class="help">A page, blog or post of this site (follows renames and moves), or any address (https://…, mailto:…).</div>
             }
             else if (t == typeof(int))
@@ -157,7 +162,7 @@ else
     private string LinkLabel(string? url)
     {
         if (!SafeUrlAttribute.TryParseReference(url, out _, out _)) return "";
-        return _map?.Describe(url!) is { } d ? $"→ {d.Title} · {d.Path}{(d.Published ? "" : " (draft)")}" : "⚠ The linked page no longer exists. Choose another.";
+        return _map?.Describe(url!) is { } d ? $"→ {d.Title} · {d.Path}{(d.Published ? "" : " · draft: hidden on the site until published")}" : "⚠ The linked page no longer exists. Choose another.";
     }
 
     private static string Humanize(string s) =>

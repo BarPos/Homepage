@@ -248,4 +248,5 @@
   document.addEventListener("alpine:initialized", refreshAll);             // Alpine may set values after we render
   document.addEventListener("reset", () => setTimeout(refreshAll), true);
   window.hpRefreshSelects = refreshAll;
+  window.hpEnhanceSelects = (root) => enhanceAll(root || document); // for controls added later by other scripts
 })();

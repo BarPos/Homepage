@@ -1,4 +1,5 @@
-<hr class="divider" />
+@{ var p = Node.PropsAs<DividerProps>(); }
+<hr class="divider divider-@p.Look.ToString().ToLowerInvariant() divider-space-@Css.Spacing(p.Spacing)" />
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
 }

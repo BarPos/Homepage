@@ -1,9 +1,12 @@
-@* The site's top (or bottom) bar: a row of brand, menus and buttons. Sticky is applied to the whole header region
-   through :has() in site.css, because a sticky element only sticks inside its parent. *@
-@{ var p = Node.PropsAs<SiteBarProps>(); }
-<div class="site-bar bar-@p.Style.ToString().ToLowerInvariant() @(p.Sticky ? "is-sticky" : "")">
-    <BlockList Nodes="Node.Children" ParentId="@Node.Id" Wrap="true"
-               Class="@($"site-bar-inner container justify-{p.Justify.ToString().ToLowerInvariant()}")" />
+@* The site's top (or bottom) bar: a row of brand, menus, buttons and any other blocks. Sticky is applied to the whole
+   header region through :has() in site.css, because a sticky element only sticks inside its parent. *@
+@{
+    var p = Node.PropsAs<SiteBarProps>();
+    var inner = $"site-bar-inner container justify-{p.Justify.ToString().ToLowerInvariant()} gap-{Css.Spacing(p.Gap)} {Css.Width(p.Width)}"
+                + (p.StackOnMobile ? " bar-stack" : "");
+}
+<div class="site-bar bar-@p.Style.ToString().ToLowerInvariant() bar-@p.Size.ToString().ToLowerInvariant() @(p.Sticky ? "is-sticky" : "")">
+    <BlockList Nodes="Node.Children" ParentId="@Node.Id" Wrap="true" Class="@inner" />
 </div>
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;

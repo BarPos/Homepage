@@ -8,6 +8,7 @@ public static class BlockComponents
         ["section"] = typeof(SectionBlock),
         ["columns"] = typeof(ColumnsBlock),
         ["column"] = typeof(ColumnBlock),
+        ["group"] = typeof(GroupBlock),
         ["heading"] = typeof(HeadingBlock),
         ["markdown"] = typeof(MarkdownBlock),
         ["image"] = typeof(ImageBlock),
