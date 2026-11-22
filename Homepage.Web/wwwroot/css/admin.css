@@ -2,6 +2,7 @@
 :root{--bg:#f5f6f8;--panel:#fff;--text:#1d2026;--muted:#646b78;--border:#dfe2e8;--primary:#3156d3;--primary-text:#fff;--danger:#c0392b;--ok:#1e8e57;--focus:#3156d340;--radius:8px;--shadow:0 1px 3px rgb(0 0 0/.06),0 4px 16px rgb(0 0 0/.04)}
 @media (prefers-color-scheme:dark){:root{--bg:#121418;--panel:#1b1e24;--text:#e7e9ee;--muted:#9aa1ad;--border:#2e333c;--primary:#7c9bf5;--primary-text:#0b1020;--danger:#ef6b5b;--ok:#4cc38a;--focus:#7c9bf540;--shadow:none}}
 *,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
 html{color-scheme:light dark}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 a{color:var(--primary)}
@@ -124,3 +125,32 @@ th a.sort{color:inherit;text-decoration:none}th a.sort:hover{color:var(--primary
   border:1px solid var(--primary);border-radius:6px;background:var(--panel);box-shadow:0 8px 24px rgb(0 0 0/.2);opacity:.95}
 ul.layers .hp-drop-target,ul.hp-drop-target{outline:2px dashed var(--primary);outline-offset:2px;min-height:24px}
 .hp-drop-line{position:fixed;z-index:1000;background:var(--primary);border-radius:2px;pointer-events:none}
+
+/* ---- modal dialog (confirmations, update progress) */
+dialog.modal{border:1px solid var(--border);border-radius:14px;padding:22px 24px 18px;width:min(460px,calc(100vw - 32px));
+  background:var(--panel);color:var(--text);box-shadow:0 24px 64px rgb(0 0 0/.28)}
+dialog.modal::backdrop{background:rgb(15 18 25/.38);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+dialog.modal[open]{animation:modal-in .16s ease-out}
+@keyframes modal-in{from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:none}}
+dialog.modal h2{margin:0 0 8px;font-size:17px}
+dialog.modal p{margin:0 0 18px;color:var(--muted);line-height:1.55}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px}
+.btn-danger-solid,button.btn-danger-solid{background:var(--danger);border-color:var(--danger);color:#fff}
+@media (prefers-reduced-motion:reduce){dialog.modal[open]{animation:none}}
+.update-modal{width:min(520px,calc(100vw - 32px))}
+.update-sub{margin-bottom:14px!important}
+.update-steps{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:9px}
+.update-steps li{display:flex;align-items:center;gap:10px;color:var(--muted)}
+.update-steps .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);flex:none;position:relative}
+.update-steps li[data-state="active"]{color:var(--text);font-weight:600}
+.update-steps li[data-state="active"] .dot{border-color:var(--primary);border-right-color:transparent;animation:spin .8s linear infinite}
+.update-steps li[data-state="done"]{color:var(--text)}
+.update-steps li[data-state="done"] .dot{background:var(--ok);border-color:var(--ok)}
+.update-steps li[data-state="done"] .dot::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.update-steps li[data-state="failed"]{color:var(--danger)}
+.update-steps li[data-state="failed"] .dot{background:var(--danger);border-color:var(--danger)}
+.update-note{padding:10px 12px;border-radius:8px;border:1px solid var(--border);color:var(--muted)!important;margin:0 0 14px!important;font-size:13px}
+.update-note.error{border-color:var(--danger);color:var(--danger)!important}
+.update-note.ok{border-color:var(--ok);color:var(--ok)!important}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.update-steps li[data-state="active"] .dot{animation:none}}

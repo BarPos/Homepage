@@ -20,6 +20,10 @@ nav_order: 7
   any user, group, role or grant changes), so revoking a role or making a user invalid takes effect on the next click.
 - **CSRF:** every admin form and htmx request carries an antiforgery token (cookie `hp_af`, path `/admin`, SameSite
   Strict); requests without it are refused. The token is never on public pages, so they can be cached.
+- **Status messages** ("Saved.", or why something was refused) are never taken from the URL. They travel in a
+  two-minute cookie protected with the Data Protection keys and are read once, so a crafted link cannot make the
+  admin show text of someone else's choosing.
+- **Confirmations** use an in-page dialog; destructive actions start with the focus on *Cancel*.
 - Two-factor sign-in is not available yet.
 
 ## Authorization

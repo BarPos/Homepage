@@ -415,8 +415,9 @@ public static class AdminEndpoints
         });
 
         // ---------------------------------------------------------------- menus
-        admin.MapGet("/menus", async (HttpContext http, MenuService menus, string? error) =>
+        admin.MapGet("/menus", async (HttpContext http, MenuService menus) =>
         {
+            var (_, error) = FlashCookie.Take(http);
             if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Menus need layout: rw.");
             return Html.Render<MenusPage>(new { Menus = await menus.ListAsync(), Error = error });
         });
@@ -425,7 +426,7 @@ public static class AdminEndpoints
         {
             var a = AdminContext.Get(http);
             try { await menus.CreateAsync(a.Perms, name, key ?? "", a.Actor); }
-            catch (Exception ex) when (ex is BlockException or ConflictException) { return Results.Redirect("/admin/menus?error=" + Uri.EscapeDataString(ex.Message)); }
+            catch (Exception ex) when (ex is BlockException or ConflictException) { return FlashCookie.Redirect(http, "/admin/menus", ex.Message, error: true); }
             return Results.Redirect("/admin/menus");
         });
 
@@ -445,14 +446,15 @@ public static class AdminEndpoints
             var urls = form["url"];
             var links = labels.Select((l, i) => new MenuLink(l ?? "", i < urls.Count ? urls[i] ?? "" : "")).ToList();
             try { await menus.SaveAsync(a.Perms, key, links, a.Actor, name: form["name"].ToString()); }
-            catch (BlockException ex) { return Results.Redirect("/admin/menus?error=" + Uri.EscapeDataString(ex.Message)); }
+            catch (BlockException ex) { return FlashCookie.Redirect(http, "/admin/menus", ex.Message, error: true); }
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             return Results.Redirect("/admin/menus");
         });
 
         // ---------------------------------------------------------------- blogs (layout: rw)
-        admin.MapGet("/blogs", async (HttpContext http, BlogService blogs, IDbContextFactory<AppDbContext> dbf, string? error) =>
+        admin.MapGet("/blogs", async (HttpContext http, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
         {
+            var (_, error) = FlashCookie.Take(http);
             if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Blogs need layout: rw.");
             await using var db = await dbf.CreateDbContextAsync();
             var counts = await db.ContentItems.Where(c => c.BlogId != null).GroupBy(c => c.BlogId!.Value)
@@ -465,7 +467,7 @@ public static class AdminEndpoints
         {
             var a = AdminContext.Get(http);
             try { await blogs.SaveAsync(a.Perms, id, name, slug, description ?? "", postsPerPage ?? 10, a.Actor); }
-            catch (Exception ex) when (ex is BlockException or ConflictException) { return Results.Redirect("/admin/blogs?error=" + Uri.EscapeDataString(ex.Message)); }
+            catch (Exception ex) when (ex is BlockException or ConflictException) { return FlashCookie.Redirect(http, "/admin/blogs", ex.Message, error: true); }
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             return Results.Redirect("/admin/blogs");
         });
@@ -474,7 +476,7 @@ public static class AdminEndpoints
         {
             var a = AdminContext.Get(http);
             try { await blogs.DeleteAsync(a.Perms, id, a.Actor); }
-            catch (ConflictException ex) { return Results.Redirect("/admin/blogs?error=" + Uri.EscapeDataString(ex.Message)); }
+            catch (ConflictException ex) { return FlashCookie.Redirect(http, "/admin/blogs", ex.Message, error: true); }
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             return Results.Redirect("/admin/blogs");
         });
@@ -491,8 +493,9 @@ public static class AdminEndpoints
             if (!AdminContext.Get(http).Perms.IsAdmin) throw new AccessDeniedException("This needs admin: rw.");
         }
 
-        admin.MapGet("/users", async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf, string? error) =>
+        admin.MapGet("/users", async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf) =>
         {
+            var (_, error) = FlashCookie.Take(http);
             RequireAdmin(http);
             var url = ListUrl.From(req, "q", "status", "role", "size", "page");
             await using var db = await dbf.CreateDbContextAsync();
@@ -523,12 +526,13 @@ public static class AdminEndpoints
         {
             RequireAdmin(http);
             var (result, user) = await accounts.CreateAsync(userName, displayName ?? "", password, AdminContext.Get(http).Actor);
-            return result.Ok ? Results.Redirect($"/admin/users/{user!.Id}") : Results.Redirect("/admin/users?error=" + Uri.EscapeDataString(result.Error ?? ""));
+            return result.Ok ? Results.Redirect($"/admin/users/{user!.Id}") : FlashCookie.Redirect(http, "/admin/users", result.Error ?? "", error: true);
         });
 
         admin.MapGet("/users/{id:int}", async (int id, HttpContext http, IDbContextFactory<AppDbContext> dbf, IPermissionService perms,
-            string? message, string? error) =>
+            CancellationToken ct) =>
         {
+            var (message, error) = FlashCookie.Take(http);
             RequireAdmin(http);
             await using var db = await dbf.CreateDbContextAsync();
             var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id) ?? throw new NotFoundException();
@@ -546,7 +550,7 @@ public static class AdminEndpoints
         {
             RequireAdmin(http);
             var a = AdminContext.Get(http);
-            if (id == a.UserId && valid != true) return Results.Redirect($"/admin/users/{id}?error=" + Uri.EscapeDataString("You cannot make your own account invalid."));
+            if (id == a.UserId && valid != true) return FlashCookie.Redirect(http, $"/admin/users/{id}", "You cannot make your own account invalid.", error: true);
             await using (var db = await dbf.CreateDbContextAsync())
             {
                 var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id) ?? throw new NotFoundException();
@@ -554,21 +558,22 @@ public static class AdminEndpoints
                 await db.SaveChangesAsync();
             }
             await accounts.SetValidAsync(id, valid == true, a.Actor);
-            return Results.Redirect($"/admin/users/{id}?message=Saved.");
+            return FlashCookie.Redirect(http, $"/admin/users/{id}", "Saved.");
         });
 
         admin.MapPost("/users/{id:int}/password", async (int id, HttpContext http, AccountService accounts, [FromForm] string password) =>
         {
             RequireAdmin(http);
             var r = await accounts.ResetPasswordAsync(id, password, AdminContext.Get(http).Actor);
-            return Results.Redirect($"/admin/users/{id}?" + (r.Ok ? "message=Password+changed." : "error=" + Uri.EscapeDataString(r.Error ?? "")));
+            return r.Ok ? FlashCookie.Redirect(http, $"/admin/users/{id}", "Password changed.") : FlashCookie.Redirect(http, $"/admin/users/{id}", r.Error ?? "", error: true);
         });
 
         foreach (var kind in new[] { "groups", "roles" })
         {
             var roles = kind == "roles";
-            admin.MapGet("/" + kind, async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf, string? error) =>
+            admin.MapGet("/" + kind, async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf) =>
             {
+                var (_, error) = FlashCookie.Take(http);
                 RequireAdmin(http);
                 var url = ListUrl.From(req, "q", "status", "size", "page");
                 var like = string.IsNullOrWhiteSpace(url["q"]) ? null : Paging.Like(url["q"]!);
@@ -603,7 +608,7 @@ public static class AdminEndpoints
                 }
                 catch (Exception ex) when (ex is BlockException or ConflictException)
                 {
-                    return Results.Redirect($"/admin/{kind}?error=" + Uri.EscapeDataString(ex.Message));
+                    return FlashCookie.Redirect(http, "/admin/" + kind, ex.Message, error: true);
                 }
                 return Results.Redirect("/admin/" + kind);
             });
@@ -676,8 +681,9 @@ public static class AdminEndpoints
 
     private static void MapSettings(RouteGroupBuilder admin)
     {
-        admin.MapGet("/settings", async (HttpContext http, IDbContextFactory<AppDbContext> dbf, ServerUpdateService updates, BlogService blogs, string? message) =>
+        admin.MapGet("/settings", async (HttpContext http, IDbContextFactory<AppDbContext> dbf, ServerUpdateService updates, BlogService blogs) =>
         {
+            var (message, error) = FlashCookie.Take(http);
             if (!AdminContext.Get(http).Perms.IsAdmin) throw new AccessDeniedException("This needs admin: rw.");
             await using var db = await dbf.CreateDbContextAsync();
             return Html.Render<SettingsPage>(new
@@ -688,7 +694,7 @@ public static class AdminEndpoints
                 Blogs = await blogs.AllAsync(),
                 Images = await db.Media.AsNoTracking().Where(m => m.ContentType.StartsWith("image/")).OrderBy(m => m.FileName).Take(1000).ToListAsync(),
                 Update = await updates.GetStatusAsync(),
-                Message = message,
+                Message = message, Error = error,
             });
         });
 
@@ -719,7 +725,7 @@ public static class AdminEndpoints
             await db.SaveChangesAsync();
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             await audit.WriteAsync(a.Actor, "settings.save", "Settings", "site", title);
-            return Results.Redirect("/admin/settings?message=Saved.");
+            return FlashCookie.Redirect(http, "/admin/settings", "Saved.");
         });
 
         admin.MapPost("/updates/check", async (HttpContext http, ServerUpdateService updates) =>
@@ -730,13 +736,31 @@ public static class AdminEndpoints
             return Results.Redirect("/admin/settings");
         });
 
+        // Downloads, verifies and stages the update; update.sh (root) applies it a moment later and restarts the server.
+        // The Settings page calls this with fetch and then polls /admin/updates/status through the restart.
         admin.MapPost("/updates/apply", async (HttpContext http, ServerUpdateService updates) =>
         {
             var a = AdminContext.Get(http);
             if (!a.Perms.IsAdmin) throw new AccessDeniedException("This needs admin: rw.");
+            var before = await updates.GetStatusAsync();
             var r = await updates.UpdateNowAsync(a.Actor);
             if (!r.Ok) throw new BlockException(r.Error ?? "The update could not be started.");
-            return Results.Redirect("/admin/settings?message=" + Uri.EscapeDataString("Update staged. The site restarts in a moment."));
+            if (http.Request.Headers.Accept.Any(x => x?.Contains("application/json", StringComparison.Ordinal) == true))
+                return Results.Json(new { ok = true, from = before.CurrentVersion, to = before.Latest?.Version });
+            return FlashCookie.Redirect(http, "/admin/settings", "Update staged. The site restarts in a moment.");
+        });
+
+        admin.MapGet("/updates/status", async (HttpContext http, ServerUpdateService updates) =>
+        {
+            if (!AdminContext.Get(http).Perms.IsAdmin) throw new AccessDeniedException("This needs admin: rw.");
+            var st = await updates.GetStatusAsync();
+            return Results.Json(new
+            {
+                version = st.CurrentVersion,
+                run = st.LastRun is { } run
+                    ? new { state = run.State.ToString(), from = run.FromVersion, to = run.ToVersion, message = run.Message, finishedAt = run.FinishedAtUtc }
+                    : null,
+            });
         });
 
         admin.MapGet("/audit", async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf) =>

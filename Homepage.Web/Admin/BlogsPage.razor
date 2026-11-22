@@ -32,7 +32,7 @@
                 </form>
                 @if (PostCounts.GetValueOrDefault(b.Id) == 0 && Blogs.Count > 1)
                 {
-                    <form method="post" action="/admin/blogs/@b.Id/delete" data-confirm="Delete this blog?" style="margin-top:8px">
+                    <form method="post" action="/admin/blogs/@b.Id/delete" data-confirm="The blog has no posts. Its address becomes free for a page or another blog." data-confirm-title="Delete the blog '@b.Name'?" data-confirm-button="Delete blog" data-confirm-danger style="margin-top:8px">
                         <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                         <button class="btn-sm btn-danger">Delete blog</button>
                     </form>

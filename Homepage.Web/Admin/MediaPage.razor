@@ -30,7 +30,7 @@
                     else { <div style="height:110px;display:grid;place-items:center" class="muted">PDF</div> }
                     <div class="meta">
                         <span title="@m.FileName">@m.FileName</span>
-                        <form method="post" action="/admin/media/@m.Id/delete" style="margin:0" data-confirm="Delete this file? Image blocks that show it become empty.">
+                        <form method="post" action="/admin/media/@m.Id/delete" style="margin:0" data-confirm="Image blocks that show it become empty. This cannot be undone." data-confirm-title="Delete '@m.FileName'?" data-confirm-button="Delete file" data-confirm-danger>
                             <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                             <button class="btn-sm btn-danger" title="Delete">✕</button>
                         </form>

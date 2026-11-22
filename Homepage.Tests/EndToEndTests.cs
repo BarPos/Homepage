@@ -81,6 +81,26 @@ public sealed class EndToEndTests(PostgresFixture pg)
             Assert.Contains("<strong>hello@example.com</strong>", page);
             Assert.Contains("/theme/", page);
 
+            // status messages cannot be injected through the URL; a real one shows once
+            Assert.DoesNotContain("Pwned-by-link", await client.GetStringAsync("/admin/settings?message=Pwned-by-link&error=Pwned-by-link"));
+            Assert.DoesNotContain("Pwned-by-link", await client.GetStringAsync("/admin/users/1?message=Pwned-by-link"));
+            var settingsPage = await client.GetStringAsync("/admin/settings");
+            var save = await client.PostAsync("/admin/settings", Form(("__RequestVerificationToken", Token(settingsPage)), ("title", "My site"), ("tagline", ""),
+                ("baseUrl", ""), ("home", ""), ("defaultGroupId", groupId), ("logoMediaId", ""), ("faviconMediaId", "")));
+            Assert.Equal(HttpStatusCode.Redirect, save.StatusCode);
+            Assert.Equal("/admin/settings", save.Headers.Location!.ToString());
+            Assert.Contains("Saved.", await client.GetStringAsync("/admin/settings"));
+            Assert.DoesNotContain("Saved.", await client.GetStringAsync("/admin/settings"));
+
+            // the update progress dialog talks JSON: status, and a readable refusal off Ubuntu installs
+            var status = await client.GetStringAsync("/admin/updates/status");
+            Assert.Contains($"\"version\":\"{Homepage.Shared.AppVersion.Current}\"", status);
+            var apply = new HttpRequestMessage(HttpMethod.Post, "/admin/updates/apply") { Content = Form(("__RequestVerificationToken", Token(settingsPage))) };
+            apply.Headers.Add("Accept", "application/json");
+            var applied = await client.SendAsync(apply);
+            Assert.Equal(HttpStatusCode.BadRequest, applied.StatusCode);
+            Assert.Contains("\"error\":", await applied.Content.ReadAsStringAsync());
+
             // security headers
             var head = await client.GetAsync("/contact");
             Assert.Contains("frame-ancestors 'none'", head.Headers.GetValues("Content-Security-Policy").Single());

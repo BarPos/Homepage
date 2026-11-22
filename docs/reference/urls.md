@@ -50,5 +50,7 @@ All under `/admin`, signed in (except `login`), never cached. POST requests need
 | `/admin/users?q=&status=&role=`, `/admin/users/<id>`, `/password` | Users |
 | `/admin/groups?q=&status=`, `/admin/roles?q=&status=` | Groups and roles |
 | `/admin/permissions/user-groups`, `/role-groups`, `/user-roles` | The relation screens |
-| `/admin/settings`, `/admin/updates/check`, `/admin/updates/apply` | Settings and updates |
+| `/admin/settings`, `/admin/updates/check` | Settings, release check |
+| `/admin/updates/apply` (POST) | Stage an update; with `Accept: application/json` answers `{"ok":true,"from":…,"to":…}` or `{"error":…}` |
+| `/admin/updates/status` | `{"version":…,"run":{"state","from","to","message","finishedAt"}}`, polled by the progress dialog |
 | `/admin/audit?q=&area=&from=&to=` | Audit log |

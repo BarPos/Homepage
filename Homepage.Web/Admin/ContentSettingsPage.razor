@@ -66,7 +66,7 @@
             @if (CanDelete)
             {
                 <h2>Delete</h2>
-                <form method="post" action="/admin/content/@Item.Id/delete" data-confirm="Delete this item permanently?">
+                <form method="post" action="/admin/content/@Item.Id/delete" data-confirm="It is removed with all its revisions. This cannot be undone." data-confirm-title="Delete '@Item.Title'?" data-confirm-button="Delete permanently" data-confirm-danger>
                     <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                     <button class="btn-danger">Delete permanently</button>
                 </form>

@@ -57,6 +57,21 @@ why it is not.
    the symlink back and starts the old version.
 5. The result appears under **Settings** after the restart. The last 3 releases are kept.
 
+**Update now** asks for confirmation, then shows a progress dialog. Keep the page open:
+
+| Step | What happens |
+|---|---|
+| Downloading and checking the release | The server downloads the package and verifies its SHA-256 |
+| Waiting for the updater | `homepage-update.path` starts `update.sh` (normally within seconds) |
+| Backing up the database and restarting | The site is unreachable while `update.sh` dumps the database, migrates and switches versions |
+| Starting the new version | The site answers again |
+
+The dialog polls the server every two seconds. When it answers with the new version, the page reloads by itself and
+**Settings** shows the finished run. If the update was **rolled back** or failed, the dialog says so with the reason,
+and the old version keeps running. If the updater has not started after two minutes, the dialog says what to check on
+the server; after 15 minutes it points at `journalctl -u homepage-update`. If the restart ended your session, you are
+sent to the sign-in page and back to **Settings**.
+
 While the server restarts, the site is unavailable for a few seconds. Public pages are served again as soon as it
 answers; the output cache starts empty.
 

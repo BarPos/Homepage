@@ -1,4 +1,7 @@
 <AdminShell Title="Settings" Section="settings">
+    <Scripts><script src="@Asset.Url("js/update-progress.js")" defer></script></Scripts>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
     @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert" style="border-color:var(--ok);color:var(--ok)">@Message</div> }
     <div class="grid2">
         <div class="card">
@@ -61,7 +64,10 @@
                     <form method="post" action="/admin/updates/check" style="margin:0"><input type="hidden" name="__RequestVerificationToken" value="@Token" /><button>Check now</button></form>
                     @if (Update.UpdateAvailable)
                     {
-                        <form method="post" action="/admin/updates/apply" style="margin:0" data-confirm="Update now? The site restarts; a failed update is rolled back automatically.">
+                        <form method="post" action="/admin/updates/apply" style="margin:0" data-update-form
+                              data-from="@Update.CurrentVersion" data-to="@Update.Latest?.Version"
+                              data-confirm="The database is backed up first, then the site restarts with the new version. It is unavailable for a short while; if the new version does not start, the old one comes back automatically."
+                              data-confirm-title="@UpdateTitle" data-confirm-button="Update now">
                             <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                             <button class="btn-primary" disabled="@(!Update.SelfUpdateSupported)">Update now</button>
                         </form>
@@ -75,6 +81,7 @@
             }
         </div>
     </div>
+    </ChildContent>
 </AdminShell>
 @code {
     [Parameter, EditorRequired] public SiteSettings S { get; set; } = default!;
@@ -86,6 +93,8 @@
     [Parameter] public List<Group> Groups { get; set; } = [];
     [Parameter, EditorRequired] public Homepage.Updates.UpdateStatus Update { get; set; } = default!;
     [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    private string UpdateTitle => $"Update to {Update.Latest?.Version}?";
     [CascadingParameter] public HttpContext? HttpContext { get; set; }
     private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
 }

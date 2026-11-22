@@ -24,7 +24,7 @@
                         <button class="btn-primary">Save menu</button>
                     </div>
                 </form>
-                <form method="post" action="/admin/menus/@m.Key/delete" data-confirm="Delete the menu '@m.Name'? Menu blocks that show it become empty." style="margin-top:8px">
+                <form method="post" action="/admin/menus/@m.Key/delete" data-confirm="Menu blocks that show it become empty." data-confirm-title="Delete the menu '@m.Name'?" data-confirm-button="Delete menu" data-confirm-danger style="margin-top:8px">
                     <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                     <button class="btn-sm btn-danger">Delete menu</button>
                 </form>
