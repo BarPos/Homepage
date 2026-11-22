@@ -1,0 +1,71 @@
+<AdminShell Title="Your profile" Section="profile">
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <div class="grid2">
+        <section class="card">
+            <h2 class="card-title">Account</h2>
+            <form method="post" action="/admin/profile">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <label>User name</label>
+                <input type="text" value="@U.UserName" disabled />
+                <div class="help">Used to sign in. Ask an administrator to change it.</div>
+                <label for="dn">Display name</label>
+                <input id="dn" name="displayName" type="text" value="@U.DisplayName" maxlength="200" required />
+                <div class="help">Shown in the admin and as the author of your posts.</div>
+                <label for="em">Email</label>
+                <input id="em" name="email" type="email" value="@U.Email" maxlength="254" autocomplete="email" />
+                <div class="form-actions"><button class="btn-primary">Save</button></div>
+            </form>
+        </section>
+        <section class="card">
+            <h2 class="card-title">Password</h2>
+            <form method="post" action="/admin/profile/password">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <label for="cp">Current password</label>
+                <input id="cp" name="current" type="password" autocomplete="current-password" required />
+                <label for="np">New password <span class="muted">(at least @Homepage.Accounts.AccountService.MinPasswordLength characters)</span></label>
+                <input id="np" name="password" type="password" autocomplete="new-password" required minlength="@Homepage.Accounts.AccountService.MinPasswordLength" />
+                <label for="np2">New password again</label>
+                <input id="np2" name="confirm" type="password" autocomplete="new-password" required />
+                <div class="help">Changing it signs you out everywhere else.</div>
+                <div class="form-actions"><button class="btn-primary">Change password</button></div>
+            </form>
+        </section>
+        <section class="card">
+            <h2 class="card-title">Two-factor sign-in
+                @if (U.TwoFactorEnabled) { <span class="badge badge-ok">On</span> } else { <span class="badge">Off</span> }</h2>
+            @if (!U.TwoFactorEnabled)
+            {
+                <p class="muted">After your password, ask for a code from an authenticator app on your phone (1Password, Bitwarden, Google Authenticator, …). Someone who learns your password still cannot sign in.</p>
+                <div class="form-actions"><a class="btn btn-primary" href="/admin/profile/2fa">Set up two-factor sign-in</a></div>
+            }
+            else
+            {
+                <p class="muted">Sign-ins ask for a code from your authenticator app. You have <strong>@RecoveryCodesLeft</strong> unused recovery codes.</p>
+                <div class="form-actions">
+                    <form method="post" action="/admin/profile/2fa/recovery" data-confirm="Your old recovery codes stop working." data-confirm-title="Create new recovery codes?" data-confirm-button="Create new codes">
+                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                        <button>New recovery codes</button>
+                    </form>
+                </div>
+                <details class="danger-zone">
+                    <summary>Turn off two-factor sign-in</summary>
+                    <form method="post" action="/admin/profile/2fa/disable">
+                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                        <label for="dp">Your password</label>
+                        <input id="dp" name="password" type="password" autocomplete="current-password" required />
+                        <div class="form-actions"><button class="btn-danger">Turn off</button></div>
+                    </form>
+                </details>
+            }
+        </section>
+    </div>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public User U { get; set; } = default!;
+    [Parameter] public int RecoveryCodesLeft { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

@@ -60,7 +60,12 @@ namespace Homepage.Server.Data.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("Ip")
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SignInIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.HasKey("Id");
 
@@ -439,6 +444,18 @@ namespace Homepage.Server.Data.Migrations
                     b.Property<string>("CustomCss")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("DraftCustomCss")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DraftFooterBlocks")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("DraftHeaderBlocks")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("DraftTokens")
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("FooterBlocks")
                         .IsRequired()

@@ -81,7 +81,7 @@ in the admin get nothing until you assign a role or a grant.
 
 | Screen | |
 |---|---|
-| **Users** | Create users (user name, display name, password), set valid/invalid, reset passwords, see effective permissions |
+| **Users** | **Add account** (user name, display name, email, password), set valid/invalid, change display name and email, reset passwords, turn off two-factor sign-in, see effective permissions |
 | **Groups** | Create, rename and comment groups; make them invalid. Names are lower case letters, digits, `-` and `_`. |
 | **Roles** | Create, rename and comment roles; make them invalid |
 | **Users ↔ Groups** | Pick a user: a table of groups × permission types. Each checkbox saves at once. |

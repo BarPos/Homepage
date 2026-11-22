@@ -44,13 +44,14 @@ public static class AdminEndpoints
             if (!await af.IsRequestValidAsync(http)) return Results.BadRequest();
             const string fail = "Wrong user name or password, or too many attempts. Wait a few minutes and try again.";
             var ip = http.Connection.RemoteIpAddress;
+            var ipText = AuditRequestInfo.Normalize(ip);
             IResult Failed(string? name = null) =>
                 Html.Render<LoginPage>(new { Token = af.GetAndStoreTokens(http).RequestToken ?? "", Error = fail, UserName = name }, 401);
 
             var reservation = limiter.TryReserve((userName ?? "").Trim().ToUpperInvariant(), ip);
             if (reservation is null)
             {
-                await audit.WriteAsync("(sign-in)", "signin.limited", "User", "", "", ip?.ToString());
+                await audit.WriteAsync("(sign-in)", "signin.limited", "User", "", "", ipText);
                 return Failed(userName);
             }
             var user = await users.FindByNameAsync((userName ?? "").Trim());
@@ -59,23 +60,61 @@ public static class AdminEndpoints
             if (user is null || !user.Valid || !ok)
             {
                 // Never store the typed name of an unknown account: it is often a password typed into the wrong field.
-                await audit.WriteAsync(user?.UserName ?? "(unknown user)", "signin.failed", "User", user?.Id.ToString() ?? "", "", ip?.ToString());
+                await audit.WriteAsync(user?.UserName ?? "(unknown user)", "signin.failed", "User", user?.Id.ToString() ?? "", "", ipText);
                 return Failed(userName);
             }
             limiter.Succeeded(reservation);
             if (!(await perms.GetAsync(user.Id)).CanSeeAdmin)
                 return Html.Render<LoginPage>(new { Token = af.GetAndStoreTokens(http).RequestToken ?? "", Error = "This account has no permissions yet. Ask an administrator.", UserName = userName }, 403);
-            var identity = new ClaimsIdentity(
-            [
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.UserName ?? ""),
-                new Claim("display_name", user.DisplayName),
-                new Claim(AdminAuth.StampClaim, user.SecurityStamp ?? ""),
-                new Claim(AdminAuth.IssuedClaim, time.GetUtcNow().ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            ], AdminAuth.Scheme);
-            await http.SignInAsync(AdminAuth.Scheme, new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = false });
-            await audit.WriteAsync(user.UserName ?? "", "signin", "User", user.Id.ToString(), "", ip?.ToString());
-            return Results.Redirect(returnUrl is { Length: > 1 } r && r.StartsWith("/admin", StringComparison.Ordinal) && !r.StartsWith("//", StringComparison.Ordinal) && !r.Contains('\\') ? r : "/admin");
+            if (user.TwoFactorEnabled)
+            {
+                // Password checked: the code from the authenticator app comes next (5 minutes, bound to this account's stamp).
+                AdminSession.SetPending(http, user, returnUrl);
+                return Results.Redirect("/admin/login/2fa");
+            }
+            await AdminSession.SignInAsync(http, user, ipText, time.GetUtcNow());
+            await audit.WriteAsync(user.UserName ?? "", "signin", "User", user.Id.ToString(), "", ipText);
+            return Results.Redirect(AdminSession.SafeReturnUrl(returnUrl));
+        }).RequireRateLimiting("signin");
+
+        anon.MapGet("/login/2fa", (HttpContext http, IAntiforgery af) =>
+            AdminSession.GetPending(http) is null
+                ? Results.Redirect("/admin/login")
+                : (IResult)Html.Render<LoginTwoFactorPage>(new { Token = af.GetAndStoreTokens(http).RequestToken ?? "" }));
+
+        anon.MapPost("/login/2fa", async (HttpContext http, IAntiforgery af, UserManager<User> users, IAuditLog audit, SignInLimiter limiter,
+            TimeProvider time, [FromForm] string code) =>
+        {
+            if (!await af.IsRequestValidAsync(http)) return Results.BadRequest();
+            var pending = AdminSession.GetPending(http);
+            if (pending is null) return Results.Redirect("/admin/login");
+            var ip = http.Connection.RemoteIpAddress;
+            var ipText = AuditRequestInfo.Normalize(ip);
+            IResult Failed(string message) =>
+                Html.Render<LoginTwoFactorPage>(new { Token = af.GetAndStoreTokens(http).RequestToken ?? "", Error = message }, 401);
+            var user = await users.FindByIdAsync(pending.UserId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (user is null || !user.Valid || !user.TwoFactorEnabled || user.SecurityStamp != pending.Stamp)
+            {
+                AdminSession.ClearPending(http);
+                return Results.Redirect("/admin/login");
+            }
+            var reservation = limiter.TryReserve("2FA|" + user.Id, ip);
+            if (reservation is null) return Failed("Too many attempts. Wait a few minutes and try again.");
+            var clean = new string((code ?? "").Where(c => !char.IsWhiteSpace(c) && c != '-').ToArray());
+            var ok = clean.Length == 6 && clean.All(char.IsAsciiDigit)
+                ? await users.VerifyTwoFactorTokenAsync(user, users.Options.Tokens.AuthenticatorTokenProvider, clean)
+                : clean.Length > 0 && (await users.RedeemTwoFactorRecoveryCodeAsync(user, (code ?? "").Trim())).Succeeded;
+            if (!ok)
+            {
+                await audit.WriteAsync(user.UserName ?? "", "signin.failed", "User", user.Id.ToString(), "wrong two-factor code", ipText);
+                return Failed("That code is not right. Use the current code from your authenticator app, or a recovery code.");
+            }
+            limiter.Succeeded(reservation);
+            AdminSession.ClearPending(http);
+            user = await users.FindByIdAsync(user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)); // a used recovery code changes the record
+            await AdminSession.SignInAsync(http, user!, ipText, time.GetUtcNow());
+            await audit.WriteAsync(user!.UserName ?? "", "signin", "User", user.Id.ToString(), clean.Length == 6 ? "two-factor" : "two-factor, recovery code", ipText);
+            return Results.Redirect(AdminSession.SafeReturnUrl(pending.ReturnUrl));
         }).RequireRateLimiting("signin");
 
         // ---------------------------------------------------------------- signed-in area
@@ -225,7 +264,7 @@ public static class AdminEndpoints
             if (doc.Target.IsTheme)
             {
                 await using var db = await dbf.CreateDbContextAsync();
-                theme = ThemeService.ToActive(await db.Themes.AsNoTracking().FirstAsync(t => t.Id == doc.ThemeId));
+                theme = ThemeService.ToActiveDraft(await db.Themes.AsNoTracking().FirstAsync(t => t.Id == doc.ThemeId));
             }
             var ctx = await ctxf.CreateAsync(edit: doc.CanEdit || true, region: region, theme: theme);
             return Html.Render<CanvasPage>(new { Ctx = ctx, Main = doc.Target.IsTheme ? new BlockTree() : doc.Tree, Title = doc.Title, IsPost = doc.Kind == TreeKind.Post });
@@ -241,7 +280,7 @@ public static class AdminEndpoints
             if (doc.Target.IsTheme)
             {
                 await using var db = await dbf.CreateDbContextAsync();
-                theme = ThemeService.ToActive(await db.Themes.AsNoTracking().FirstAsync(t => t.Id == doc.ThemeId));
+                theme = ThemeService.ToActiveDraft(await db.Themes.AsNoTracking().FirstAsync(t => t.Id == doc.ThemeId));
             }
             var ctx = (await ctxf.CreateAsync(edit: true, region: region, theme: theme)).ForRegion(region);
             return Html.Render<CanvasRegion>(new { Ctx = ctx, Tree = doc.Tree, Contain = doc.Kind == TreeKind.Page });
@@ -356,7 +395,9 @@ public static class AdminEndpoints
             if (!a.Perms.HasSystem(SystemGroups.Themes, Perm.Rw)) throw new AccessDeniedException("Editing themes needs themes: rw.");
             var theme = await themes.GetAsync(a.Perms, id);
             if (theme.IsBuiltIn) throw new AccessDeniedException("Built-in themes are read-only. Duplicate the theme to change it.");
-            return Html.Render<ThemeEditPage>(new { Theme = theme });
+            var (message, error) = FlashCookie.Take(http);
+            return Html.Render<ThemeEditPage>(new { Theme = theme, Message = message, Error = error,
+                CanEditLayout = a.Perms.HasSystem(SystemGroups.Layout, Perm.Rw) });
         });
 
         admin.MapPost("/themes/{id:int}", async (int id, HttpContext http, ThemeService themes, IOutputCacheStore cache) =>
@@ -382,28 +423,49 @@ public static class AdminEndpoints
                 GlassOpacity = Num(form["glassOpacity"], 0.62),
                 Backdrop = form["backdrop"].ToString(),
             };
-            var live = await themes.SaveAsync(a.Perms, id, form["name"].ToString(), tokens, form["customCss"].ToString(), a.Actor);
-            if (live) await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+            await themes.SaveDraftAsync(a.Perms, id, form["name"].ToString(), tokens, form["customCss"].ToString());
             if (http.Request.Headers.ContainsKey("HX-Request"))
             {
-                Flash.Ok(http.Response, live ? "Theme saved. The site uses the new design." : "Theme saved.");
+                Flash.Ok(http.Response, "Draft saved. Publish to make it live.");
+                http.Response.Headers["HX-Refresh"] = "true"; // updates the draft status and buttons
                 return Results.NoContent();
             }
             return Results.Redirect($"/admin/themes/{id}");
+        });
+
+        admin.MapPost("/themes/{id:int}/publish", async (int id, HttpContext http, ThemeService themes, IOutputCacheStore cache) =>
+        {
+            var a = AdminContext.Get(http);
+            var live = await themes.PublishAsync(a.Perms, id, a.Actor);
+            if (live) await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+            if (http.Request.Headers.ContainsKey("HX-Request"))
+            {
+                Flash.Ok(http.Response, live ? "Published. The site uses the new version." : "Published.");
+                http.Response.Headers["HX-Refresh"] = "true";
+                return Results.NoContent();
+            }
+            return FlashCookie.Redirect(http, $"/admin/themes/{id}", live ? "Published. The site uses the new version." : "Published.");
+        });
+
+        admin.MapPost("/themes/{id:int}/discard", async (int id, HttpContext http, ThemeService themes) =>
+        {
+            var a = AdminContext.Get(http);
+            await themes.DiscardDraftAsync(a.Perms, id, a.Actor);
+            return FlashCookie.Redirect(http, $"/admin/themes/{id}", "Unpublished changes discarded.");
         });
 
         admin.MapGet("/themes/{id:int}/preview", async (int id, HttpContext http, ThemeService themes, RenderContextFactory ctxf, PublicContent pub) =>
         {
             var a = AdminContext.Get(http);
             var theme = await themes.GetAsync(a.Perms, id);
-            var active = ThemeService.ToActive(theme);
+            var active = ThemeService.ToActiveDraft(theme); // the preview shows unpublished changes
             var ctx = await ctxf.CreateAsync(theme: active);
             var home = ctx.Site.HomePageId is { } hid ? await pub.GetPublishedByIdAsync(hid) : null;
             return Html.Render<ThemePreview>(new
             {
                 Ctx = ctx,
                 Tree = home is null ? new BlockTree() : BlockTree.Parse(home.Blocks),
-                Css = active.Tokens.ToCss(theme.CustomCss),
+                Css = active.Tokens.ToCss(theme.DraftCustomCss ?? theme.CustomCss),
             });
         });
 
@@ -423,19 +485,58 @@ public static class AdminEndpoints
         });
 
         // ---------------------------------------------------------------- menus
+        static void RequireLayout(HttpContext http, string what)
+        {
+            if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException($"{what} need layout: rw.");
+        }
+        static List<MenuLink> FormLinks(IFormCollection form)
+        {
+            var labels = form["label"];
+            var urls = form["url"];
+            return labels.Select((l, i) => new MenuLink(l ?? "", i < urls.Count ? urls[i] ?? "" : "")).ToList();
+        }
+
         admin.MapGet("/menus", async (HttpContext http, MenuService menus) =>
         {
-            var (_, error) = FlashCookie.Take(http);
-            if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Menus need layout: rw.");
-            return Html.Render<MenusPage>(new { Menus = await menus.ListAsync(), Error = error });
+            RequireLayout(http, "Menus");
+            var (message, error) = FlashCookie.Take(http);
+            return Html.Render<MenusPage>(new { Menus = await menus.ListAsync(), Message = message, Error = error });
         });
 
-        admin.MapPost("/menus", async (HttpContext http, MenuService menus, [FromForm] string name, [FromForm] string? key) =>
+        admin.MapGet("/menus/new", (HttpContext http) =>
+        {
+            RequireLayout(http, "Menus");
+            return Html.Render<MenuEditPage>(new { });
+        });
+
+        admin.MapGet("/menus/{key}", async (string key, HttpContext http, MenuService menus) =>
+        {
+            RequireLayout(http, "Menus");
+            var menu = (await menus.ListAsync()).FirstOrDefault(m => m.Key == key) ?? throw new NotFoundException();
+            var (message, error) = FlashCookie.Take(http);
+            return Html.Render<MenuEditPage>(new { Menu = menu, menu.Name, menu.Key, Links = MenuService.Parse(menu.Items), Message = message, Error = error });
+        });
+
+        admin.MapPost("/menus", async (HttpContext http, MenuService menus, IOutputCacheStore cache) =>
         {
             var a = AdminContext.Get(http);
-            try { await menus.CreateAsync(a.Perms, name, key ?? "", a.Actor); }
-            catch (Exception ex) when (ex is BlockException or ConflictException) { return FlashCookie.Redirect(http, "/admin/menus", ex.Message, error: true); }
-            return Results.Redirect("/admin/menus");
+            var form = await http.Request.ReadFormAsync();
+            var links = FormLinks(form);
+            string name = form["name"].ToString(), key = form["key"].ToString();
+            try
+            {
+                if (links.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l.Label) && !SafeUrlAttribute.IsSafe(l.Url)) is { } bad)
+                    throw new BlockException($"'{bad.Url}' is not an allowed link.");
+                var menu = await menus.CreateAsync(a.Perms, name, key, a.Actor);
+                if (links.Any(l => !string.IsNullOrWhiteSpace(l.Label))) await menus.SaveAsync(a.Perms, menu.Key, links, a.Actor);
+                await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
+                return FlashCookie.Redirect(http, $"/admin/menus/{menu.Key}", "Menu created. Show it with a Menu block.");
+            }
+            catch (Exception ex) when (ex is BlockException or ConflictException)
+            {
+                // keep what was typed
+                return Html.Render<MenuEditPage>(new { Name = name, Key = key, Links = links, Error = ex.Message });
+            }
         });
 
         admin.MapPost("/menus/{key}/delete", async (string key, HttpContext http, MenuService menus, IOutputCacheStore cache) =>
@@ -443,55 +544,203 @@ public static class AdminEndpoints
             var a = AdminContext.Get(http);
             await menus.DeleteAsync(a.Perms, key, a.Actor);
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
-            return Results.Redirect("/admin/menus");
+            return FlashCookie.Redirect(http, "/admin/menus", "Menu deleted.");
         });
 
         admin.MapPost("/menus/{key}", async (string key, HttpContext http, MenuService menus, IOutputCacheStore cache) =>
         {
             var a = AdminContext.Get(http);
             var form = await http.Request.ReadFormAsync();
-            var labels = form["label"];
-            var urls = form["url"];
-            var links = labels.Select((l, i) => new MenuLink(l ?? "", i < urls.Count ? urls[i] ?? "" : "")).ToList();
+            var links = FormLinks(form);
             try { await menus.SaveAsync(a.Perms, key, links, a.Actor, name: form["name"].ToString()); }
-            catch (BlockException ex) { return FlashCookie.Redirect(http, "/admin/menus", ex.Message, error: true); }
+            catch (BlockException ex)
+            {
+                var menu = (await menus.ListAsync()).FirstOrDefault(m => m.Key == key) ?? throw new NotFoundException();
+                return Html.Render<MenuEditPage>(new { Menu = menu, Name = form["name"].ToString(), menu.Key, Links = links, Error = ex.Message });
+            }
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
-            return Results.Redirect("/admin/menus");
+            return FlashCookie.Redirect(http, $"/admin/menus/{key}", "Saved.");
         });
 
         // ---------------------------------------------------------------- blogs (layout: rw)
+        static async Task<Dictionary<int, int>> PostCounts(HttpContext http, AppDbContext db)
+        {
+            var visible = AdminContext.Get(http).Perms.GroupsWith(Perm.Ro);
+            return await db.ContentItems.Where(c => c.BlogId != null && visible.Contains(c.GroupId)).GroupBy(c => c.BlogId!.Value)
+                .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
+        }
+        static async Task<IResult> BlogEditor(HttpContext http, BlogService blogs, AppDbContext db, Blog? blog, string? message, string? error,
+            string? name = null, string? slug = null, string? description = null, int? postsPerPage = null)
+        {
+            var all = await blogs.AllAsync();
+            // Deleting needs no posts at all (not just none visible to this user); the service checks again.
+            var count = blog is null ? 0 : await db.ContentItems.CountAsync(c => c.BlogId == blog.Id);
+            return Html.Render<BlogEditPage>(new
+            {
+                Blog = blog,
+                Name = name ?? blog?.Name ?? "", Slug = slug ?? blog?.Slug ?? "", Description = description ?? blog?.Description ?? "",
+                PostsPerPage = postsPerPage ?? blog?.PostsPerPage ?? 10,
+                PostCount = blog is null ? 0 : (await PostCounts(http, db)).GetValueOrDefault(blog.Id),
+                CanDelete = blog is not null && count == 0 && all.Count > 1,
+                HomeBlogId = (await SiteSettings.LoadAsync(db)).HomeBlogId,
+                Message = message, Error = error,
+            });
+        }
+
         admin.MapGet("/blogs", async (HttpContext http, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
         {
-            var (_, error) = FlashCookie.Take(http);
-            if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Blogs need layout: rw.");
+            RequireLayout(http, "Blogs");
+            var (message, error) = FlashCookie.Take(http);
             await using var db = await dbf.CreateDbContextAsync();
-            var visible = AdminContext.Get(http).Perms.GroupsWith(Perm.Ro);
-            var counts = await db.ContentItems.Where(c => c.BlogId != null && visible.Contains(c.GroupId)).GroupBy(c => c.BlogId!.Value)
-                .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
-            return Html.Render<BlogsPage>(new { Blogs = await blogs.AllAsync(), PostCounts = counts, HomeBlogId = (await SiteSettings.LoadAsync(db)).HomeBlogId, Error = error });
+            return Html.Render<BlogsPage>(new { Blogs = await blogs.AllAsync(), PostCounts = await PostCounts(http, db), HomeBlogId = (await SiteSettings.LoadAsync(db)).HomeBlogId, Message = message, Error = error });
         });
 
-        admin.MapPost("/blogs", async (HttpContext http, BlogService blogs, IOutputCacheStore cache, [FromForm] int? id, [FromForm] string name,
-            [FromForm] string slug, [FromForm] string? description, [FromForm] int? postsPerPage) =>
+        admin.MapGet("/blogs/new", async (HttpContext http, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
+        {
+            RequireLayout(http, "Blogs");
+            await using var db = await dbf.CreateDbContextAsync();
+            return await BlogEditor(http, blogs, db, null, null, null);
+        });
+
+        admin.MapGet("/blogs/{id:int}", async (int id, HttpContext http, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
+        {
+            RequireLayout(http, "Blogs");
+            var blog = await blogs.ByIdAsync(id) ?? throw new NotFoundException();
+            var (message, error) = FlashCookie.Take(http);
+            await using var db = await dbf.CreateDbContextAsync();
+            return await BlogEditor(http, blogs, db, blog, message, error);
+        });
+
+        admin.MapPost("/blogs", async (HttpContext http, BlogService blogs, IOutputCacheStore cache, IDbContextFactory<AppDbContext> dbf,
+            [FromForm] int? id, [FromForm] string name, [FromForm] string slug, [FromForm] string? description, [FromForm] int? postsPerPage) =>
         {
             var a = AdminContext.Get(http);
-            try { await blogs.SaveAsync(a.Perms, id, name, slug, description ?? "", postsPerPage ?? 10, a.Actor); }
-            catch (Exception ex) when (ex is BlockException or ConflictException) { return FlashCookie.Redirect(http, "/admin/blogs", ex.Message, error: true); }
+            Blog saved;
+            try { saved = await blogs.SaveAsync(a.Perms, id, name, slug, description ?? "", postsPerPage ?? 10, a.Actor); }
+            catch (Exception ex) when (ex is BlockException or ConflictException)
+            {
+                await using var db = await dbf.CreateDbContextAsync();
+                var blog = id is { } bid ? await blogs.ByIdAsync(bid) ?? throw new NotFoundException() : null;
+                return await BlogEditor(http, blogs, db, blog, null, ex.Message, name, slug, description, postsPerPage);
+            }
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
-            return Results.Redirect("/admin/blogs");
+            return FlashCookie.Redirect(http, $"/admin/blogs/{saved.Id}", id is null ? "Blog created. Pick it when you write a post." : "Saved.");
         });
 
         admin.MapPost("/blogs/{id:int}/delete", async (int id, HttpContext http, BlogService blogs, IOutputCacheStore cache) =>
         {
             var a = AdminContext.Get(http);
             try { await blogs.DeleteAsync(a.Perms, id, a.Actor); }
-            catch (ConflictException ex) { return FlashCookie.Redirect(http, "/admin/blogs", ex.Message, error: true); }
+            catch (ConflictException ex) { return FlashCookie.Redirect(http, $"/admin/blogs/{id}", ex.Message, error: true); }
             await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
-            return Results.Redirect("/admin/blogs");
+            return FlashCookie.Redirect(http, "/admin/blogs", "Blog deleted.");
         });
 
+        MapProfile(admin);
         MapAccess(admin);
         MapSettings(admin);
+    }
+
+    // ---------------------------------------------------------------- the signed-in user's own profile
+    private static void MapProfile(RouteGroupBuilder admin)
+    {
+        static async Task<User> Me(HttpContext http, UserManager<User> users) =>
+            await users.FindByIdAsync(AdminContext.Get(http).UserId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            ?? throw new NotFoundException();
+
+        admin.MapGet("/profile", async (HttpContext http, UserManager<User> users) =>
+        {
+            var me = await Me(http, users);
+            var (message, error) = FlashCookie.Take(http);
+            return Html.Render<ProfilePage>(new { U = me, RecoveryCodesLeft = await users.CountRecoveryCodesAsync(me), Message = message, Error = error });
+        });
+
+        admin.MapPost("/profile", async (HttpContext http, UserManager<User> users, IAuditLog audit, PublicContent content, IOutputCacheStore cache,
+            [FromForm] string displayName, [FromForm] string? email) =>
+        {
+            var me = await Me(http, users);
+            displayName = (displayName ?? "").Trim();
+            if (displayName.Length is 0 or > 200) return FlashCookie.Redirect(http, "/admin/profile", "The display name must be 1 to 200 characters.", error: true);
+            var clean = Homepage.Accounts.AccountService.CleanEmail(email, out var emailOk);
+            if (!emailOk) return FlashCookie.Redirect(http, "/admin/profile", "That email address does not look right.", error: true);
+            me.DisplayName = displayName;
+            var r = await users.UpdateAsync(me);
+            if (r.Succeeded && me.Email != clean) r = await users.SetEmailAsync(me, clean);
+            if (!r.Succeeded) return FlashCookie.Redirect(http, "/admin/profile", string.Join(" ", r.Errors.Select(e => e.Description)), error: true);
+            await AdminSession.RefreshAsync(http, me);
+            content.ForgetAuthor(me.Id);
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default); // posts show the display name
+            await audit.WriteAsync(me.UserName ?? "", "user.profile", "User", me.Id.ToString(), "display name and email");
+            return FlashCookie.Redirect(http, "/admin/profile", "Saved.");
+        });
+
+        admin.MapPost("/profile/password", async (HttpContext http, UserManager<User> users, IAuditLog audit,
+            [FromForm] string current, [FromForm] string password, [FromForm] string confirm) =>
+        {
+            var me = await Me(http, users);
+            if (password != confirm) return FlashCookie.Redirect(http, "/admin/profile", "The new passwords do not match.", error: true);
+            if ((password ?? "").Length < Homepage.Accounts.AccountService.MinPasswordLength)
+                return FlashCookie.Redirect(http, "/admin/profile", $"Passwords need at least {Homepage.Accounts.AccountService.MinPasswordLength} characters.", error: true);
+            var r = await users.ChangePasswordAsync(me, current ?? "", password!);
+            if (!r.Succeeded)
+                return FlashCookie.Redirect(http, "/admin/profile", r.Errors.Any(e => e.Code == "PasswordMismatch") ? "The current password is not right." : string.Join(" ", r.Errors.Select(e => e.Description)), error: true);
+            await AdminSession.RefreshAsync(http, me); // other sessions end (new security stamp); this one continues
+            await audit.WriteAsync(me.UserName ?? "", "user.password", "User", me.Id.ToString(), "changed own password");
+            return FlashCookie.Redirect(http, "/admin/profile", "Password changed. You were signed out everywhere else.");
+        });
+
+        admin.MapGet("/profile/2fa", async (HttpContext http, UserManager<User> users, IDbContextFactory<AppDbContext> dbf) =>
+        {
+            var me = await Me(http, users);
+            if (me.TwoFactorEnabled) return Results.Redirect("/admin/profile");
+            var key = await users.GetAuthenticatorKeyAsync(me);
+            if (string.IsNullOrEmpty(key))
+            {
+                await users.ResetAuthenticatorKeyAsync(me);
+                key = await users.GetAuthenticatorKeyAsync(me);
+                await AdminSession.RefreshAsync(http, me);
+            }
+            await using var db = await dbf.CreateDbContextAsync();
+            var issuer = (await SiteSettings.LoadAsync(db)).Title;
+            var label = Uri.EscapeDataString($"{issuer}:{me.UserName}");
+            var uri = $"otpauth://totp/{label}?secret={key}&issuer={Uri.EscapeDataString(issuer)}&digits=6";
+            using var qr = new QRCoder.QRCodeGenerator().CreateQrCode(uri, QRCoder.QRCodeGenerator.ECCLevel.M);
+            var svg = new QRCoder.SvgQRCode(qr).GetGraphic(5);
+            var (_, error) = FlashCookie.Take(http);
+            return Html.Render<TwoFactorSetupPage>(new { QrSvg = svg, Key = key!, Error = error });
+        });
+
+        admin.MapPost("/profile/2fa", async (HttpContext http, UserManager<User> users, IAuditLog audit, [FromForm] string code) =>
+        {
+            var me = await Me(http, users);
+            var clean = new string((code ?? "").Where(char.IsAsciiDigit).ToArray());
+            if (!await users.VerifyTwoFactorTokenAsync(me, users.Options.Tokens.AuthenticatorTokenProvider, clean))
+                return FlashCookie.Redirect(http, "/admin/profile/2fa", "That code is not right. Check the time on your phone and try the current code.", error: true);
+            await users.SetTwoFactorEnabledAsync(me, true);
+            var codes = (await users.GenerateNewTwoFactorRecoveryCodesAsync(me, 10))!.ToList();
+            await AdminSession.RefreshAsync(http, me);
+            await audit.WriteAsync(me.UserName ?? "", "user.2fa.on", "User", me.Id.ToString(), "");
+            return Html.Render<RecoveryCodesPage>(new { Codes = codes, JustEnabled = true });
+        });
+
+        admin.MapPost("/profile/2fa/recovery", async (HttpContext http, UserManager<User> users, IAuditLog audit) =>
+        {
+            var me = await Me(http, users);
+            if (!me.TwoFactorEnabled) return Results.Redirect("/admin/profile");
+            var codes = (await users.GenerateNewTwoFactorRecoveryCodesAsync(me, 10))!.ToList();
+            await AdminSession.RefreshAsync(http, me);
+            await audit.WriteAsync(me.UserName ?? "", "user.2fa.codes", "User", me.Id.ToString(), "new recovery codes");
+            return Html.Render<RecoveryCodesPage>(new { Codes = codes, JustEnabled = false });
+        });
+
+        admin.MapPost("/profile/2fa/disable", async (HttpContext http, UserManager<User> users, AccountService accounts, [FromForm] string password) =>
+        {
+            var me = await Me(http, users);
+            if (!await users.CheckPasswordAsync(me, password ?? "")) return FlashCookie.Redirect(http, "/admin/profile", "The password is not right.", error: true);
+            await accounts.DisableTwoFactorAsync(me.Id, me.UserName ?? "");
+            await AdminSession.RefreshAsync(http, await Me(http, users));
+            return FlashCookie.Redirect(http, "/admin/profile", "Two-factor sign-in is off.");
+        });
     }
 
     // ---------------------------------------------------------------- users, groups, roles, relations (admin: rw)
@@ -512,7 +761,7 @@ public static class AdminEndpoints
             if (!string.IsNullOrWhiteSpace(url["q"]))
             {
                 var like = Paging.Like(url["q"]!);
-                q = q.Where(u => EF.Functions.ILike(u.UserName!, like) || EF.Functions.ILike(u.DisplayName, like));
+                q = q.Where(u => EF.Functions.ILike(u.UserName!, like) || EF.Functions.ILike(u.DisplayName, like) || EF.Functions.ILike(u.Email!, like));
             }
             if (url["status"] == "valid") q = q.Where(u => u.Valid);
             else if (url["status"] == "invalid") q = q.Where(u => !u.Valid);
@@ -530,12 +779,27 @@ public static class AdminEndpoints
             });
         });
 
-        admin.MapPost("/users", async (HttpContext http, AccountService accounts, [FromForm] string userName, [FromForm] string? displayName,
-            [FromForm] string password) =>
+        admin.MapGet("/users/new", (HttpContext http) =>
         {
             RequireAdmin(http);
-            var (result, user) = await accounts.CreateAsync(userName, displayName ?? "", password, AdminContext.Get(http).Actor);
-            return result.Ok ? Results.Redirect($"/admin/users/{user!.Id}") : FlashCookie.Redirect(http, "/admin/users", result.Error ?? "", error: true);
+            var (_, error) = FlashCookie.Take(http);
+            return Html.Render<UserNewPage>(new { Error = error });
+        });
+
+        admin.MapPost("/users", async (HttpContext http, AccountService accounts, [FromForm] string userName, [FromForm] string? displayName,
+            [FromForm] string? email, [FromForm] string password) =>
+        {
+            RequireAdmin(http);
+            var (result, user) = await accounts.CreateAsync(userName, displayName ?? "", password, AdminContext.Get(http).Actor, email: email);
+            return result.Ok ? FlashCookie.Redirect(http, $"/admin/users/{user!.Id}", "Account created. Give it roles or group permissions next.")
+                             : FlashCookie.Redirect(http, "/admin/users/new", result.Error ?? "", error: true);
+        });
+
+        admin.MapPost("/users/{id:int}/2fa/disable", async (int id, HttpContext http, AccountService accounts) =>
+        {
+            RequireAdmin(http);
+            var r = await accounts.DisableTwoFactorAsync(id, AdminContext.Get(http).Actor);
+            return r.Ok ? FlashCookie.Redirect(http, $"/admin/users/{id}", "Two-factor sign-in is off for this account.") : FlashCookie.Redirect(http, $"/admin/users/{id}", r.Error ?? "", error: true);
         });
 
         admin.MapGet("/users/{id:int}", async (int id, HttpContext http, IDbContextFactory<AppDbContext> dbf, IPermissionService perms,
@@ -555,18 +819,28 @@ public static class AdminEndpoints
         });
 
         admin.MapPost("/users/{id:int}", async (int id, HttpContext http, IDbContextFactory<AppDbContext> dbf, AccountService accounts,
-            [FromForm] string? displayName, [FromForm] bool? valid) =>
+            PublicContent content, IOutputCacheStore cache, IAuditLog audit,
+            [FromForm] string? displayName, [FromForm] string? email, [FromForm] bool? valid) =>
         {
             RequireAdmin(http);
             var a = AdminContext.Get(http);
             if (id == a.UserId && valid != true) return FlashCookie.Redirect(http, $"/admin/users/{id}", "You cannot make your own account invalid.", error: true);
+            var cleanEmail = Homepage.Accounts.AccountService.CleanEmail(email, out var emailOk);
+            if (!emailOk) return FlashCookie.Redirect(http, $"/admin/users/{id}", "That email address does not look right.", error: true);
+            bool wasValid;
             await using (var db = await dbf.CreateDbContextAsync())
             {
                 var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id) ?? throw new NotFoundException();
+                wasValid = user.Valid;
                 user.DisplayName = (displayName ?? "").Trim() is { Length: > 0 } d ? d[..Math.Min(d.Length, 200)] : user.UserName ?? "";
+                user.Email = cleanEmail;
+                user.NormalizedEmail = cleanEmail?.ToUpperInvariant();
                 await db.SaveChangesAsync();
             }
-            await accounts.SetValidAsync(id, valid == true, a.Actor);
+            if (wasValid != (valid == true)) await accounts.SetValidAsync(id, valid == true, a.Actor);
+            await audit.WriteAsync(a.Actor, "user.update", "User", id.ToString(), "display name and email");
+            content.ForgetAuthor(id);
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default);
             return FlashCookie.Redirect(http, $"/admin/users/{id}", "Saved.");
         });
 
@@ -582,7 +856,7 @@ public static class AdminEndpoints
             var roles = kind == "roles";
             admin.MapGet("/" + kind, async (HttpContext http, HttpRequest req, IDbContextFactory<AppDbContext> dbf) =>
             {
-                var (_, error) = FlashCookie.Take(http);
+                var (message, error) = FlashCookie.Take(http);
                 RequireAdmin(http);
                 var url = ListUrl.From(req, "q", "status", "size", "page");
                 var like = string.IsNullOrWhiteSpace(url["q"]) ? null : Paging.Like(url["q"]!);
@@ -604,22 +878,73 @@ public static class AdminEndpoints
                     result = await q.OrderByDescending(g => g.IsSystem).ThenBy(g => g.Name)
                         .Select(g => new GroupsPage.Row(g.Id, g.Name, g.Comment, g.Valid, g.IsSystem)).ToPageAsync(Int(url["page"]), Int(url["size"]));
                 }
-                return Html.Render<GroupsPage>(new { Result = result, Url = url, IsRoles = roles, Error = error });
+                return Html.Render<GroupsPage>(new { Result = result, Url = url, IsRoles = roles, Message = message, Error = error });
             });
-            admin.MapPost("/" + kind, async (HttpContext http, PermissionAdminService svc, [FromForm] int? id, [FromForm] string name,
+
+            async Task<IResult> Editor(HttpContext http, AppDbContext db, int? id, string? message, string? error,
+                string? name = null, string? comment = null, bool? valid = null)
+            {
+                GroupsPage.Row? row = null;
+                string? usage = null;
+                if (id is { } gid)
+                {
+                    if (roles)
+                    {
+                        row = await db.PermissionRoles.AsNoTracking().Where(r => r.Id == gid).Select(r => new GroupsPage.Row(r.Id, r.Name, r.Comment, r.Valid, false)).FirstOrDefaultAsync()
+                              ?? throw new NotFoundException();
+                        var users = await db.UserRoles.CountAsync(x => x.RoleId == gid);
+                        usage = users == 1 ? "1 user has this role." : $"{users} users have this role.";
+                    }
+                    else
+                    {
+                        row = await db.Groups.AsNoTracking().Where(g => g.Id == gid).Select(g => new GroupsPage.Row(g.Id, g.Name, g.Comment, g.Valid, g.IsSystem)).FirstOrDefaultAsync()
+                              ?? throw new NotFoundException();
+                        if (!row.IsSystem)
+                        {
+                            var content = await db.ContentItems.CountAsync(c => c.GroupId == gid);
+                            var media = await db.Media.CountAsync(m => m.GroupId == gid);
+                            usage = $"In this group: {content} pages and posts, {media} media files.";
+                        }
+                    }
+                }
+                return Html.Render<GroupEditPage>(new
+                {
+                    Row = row, IsRoles = roles, Name = name ?? row?.Name ?? "", Comment = comment ?? row?.Comment ?? "", Valid = valid ?? row?.Valid ?? true,
+                    UsageNote = usage, Message = message, Error = error,
+                });
+            }
+
+            admin.MapGet("/" + kind + "/new", async (HttpContext http, IDbContextFactory<AppDbContext> dbf) =>
+            {
+                RequireAdmin(http);
+                await using var db = await dbf.CreateDbContextAsync();
+                return await Editor(http, db, null, null, null);
+            });
+
+            admin.MapGet("/" + kind + "/{id:int}", async (int id, HttpContext http, IDbContextFactory<AppDbContext> dbf) =>
+            {
+                RequireAdmin(http);
+                var (message, error) = FlashCookie.Take(http);
+                await using var db = await dbf.CreateDbContextAsync();
+                return await Editor(http, db, id, message, error);
+            });
+            admin.MapPost("/" + kind, async (HttpContext http, PermissionAdminService svc, IDbContextFactory<AppDbContext> dbf, [FromForm] int? id, [FromForm] string name,
                 [FromForm] string? comment, [FromForm] bool? valid) =>
             {
                 var a = AdminContext.Get(http);
+                int savedId;
                 try
                 {
-                    if (roles) await svc.SaveRoleAsync(a.Perms, id, name, comment ?? "", valid == true, a.Actor);
-                    else await svc.SaveGroupAsync(a.Perms, id, name, comment ?? "", valid == true, a.Actor);
+                    savedId = roles ? (await svc.SaveRoleAsync(a.Perms, id, name, comment ?? "", valid == true, a.Actor)).Id
+                                    : (await svc.SaveGroupAsync(a.Perms, id, name, comment ?? "", valid == true, a.Actor)).Id;
                 }
                 catch (Exception ex) when (ex is BlockException or ConflictException)
                 {
-                    return FlashCookie.Redirect(http, "/admin/" + kind, ex.Message, error: true);
+                    await using var db = await dbf.CreateDbContextAsync();
+                    return await Editor(http, db, id, null, ex.Message, name, comment, valid == true);
                 }
-                return Results.Redirect("/admin/" + kind);
+                var noun = roles ? "Role" : "Group";
+                return FlashCookie.Redirect(http, $"/admin/{kind}/{savedId}", id is null ? $"{noun} created." : "Saved.");
             });
         }
 
@@ -782,7 +1107,8 @@ public static class AdminEndpoints
             {
                 var like = Paging.Like(url["q"]!);
                 q = q.Where(x => EF.Functions.ILike(x.Actor, like) || EF.Functions.ILike(x.Action, like) || EF.Functions.ILike(x.Details, like)
-                                 || EF.Functions.ILike(x.EntityId, like) || (x.Ip != null && EF.Functions.ILike(x.Ip, like)));
+                                 || EF.Functions.ILike(x.EntityId, like) || (x.Ip != null && EF.Functions.ILike(x.Ip, like))
+                                 || (x.SignInIp != null && EF.Functions.ILike(x.SignInIp, like)));
             }
             if (url["area"] is { Length: > 0 } area && AuditPage.Areas.Any(x => x.Key == area)) q = q.Where(x => x.Action.StartsWith(area));
             if (DateTime.TryParse(url["from"], System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeLocal, out var from))

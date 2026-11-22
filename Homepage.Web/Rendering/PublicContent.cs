@@ -7,7 +7,7 @@ namespace Homepage.Web.Rendering;
 
 /// <summary>A published page or post in a list, with its public URL.</summary>
 public sealed record PostSummary(int Id, ContentType Type, string Title, string Slug, string Excerpt, DateTime? PublishedAtUtc,
-    DateTime UpdatedAtUtc, int? BlogId, string Url);
+    DateTime UpdatedAtUtc, int? BlogId, string Url, string? Author = null);
 
 /// <summary>Read-only queries for the public site: published items only.</summary>
 public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMemoryCache cache, BlogService blogs)
@@ -20,9 +20,35 @@ public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMe
     private async Task<List<PostSummary>> ToSummariesAsync(IQueryable<ContentItem> q, CancellationToken ct)
     {
         var slugs = await blogs.SlugsAsync(ct);
-        var rows = await q.Select(c => new { c.Id, c.Type, c.Title, c.Slug, c.Excerpt, c.PublishedAtUtc, c.UpdatedAtUtc, c.BlogId }).ToListAsync(ct);
+        var rows = await q.Select(c => new { c.Id, c.Type, c.Title, c.Slug, c.Excerpt, c.PublishedAtUtc, c.UpdatedAtUtc, c.BlogId, c.AuthorId }).ToListAsync(ct);
+        var authors = await AuthorNamesAsync(rows.Where(r => r.Type == ContentType.Post).Select(r => r.AuthorId), ct);
         return rows.Select(c => new PostSummary(c.Id, c.Type, c.Title, c.Slug, c.Excerpt, c.PublishedAtUtc, c.UpdatedAtUtc, c.BlogId,
-            Url(c.Type, c.Slug, c.BlogId, slugs))).ToList();
+            Url(c.Type, c.Slug, c.BlogId, slugs), c.AuthorId is { } a ? authors.GetValueOrDefault(a) : null)).ToList();
+    }
+
+    /// <summary>Display names of the given users (cached briefly; names change rarely).</summary>
+    public async Task<Dictionary<int, string>> AuthorNamesAsync(IEnumerable<int?> userIds, CancellationToken ct = default)
+    {
+        var ids = userIds.OfType<int>().Distinct().ToList();
+        var result = new Dictionary<int, string>();
+        var missing = new List<int>();
+        foreach (var id in ids)
+        {
+            if (cache.TryGetValue("author:" + id, out string? n)) { if (n is not null) result[id] = n; }
+            else missing.Add(id);
+        }
+        if (missing.Count == 0) return result;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var found = await db.Users.AsNoTracking().Where(u => missing.Contains(u.Id))
+            .Select(u => new { u.Id, u.DisplayName, u.UserName }).ToListAsync(ct);
+        foreach (var id in missing)
+        {
+            var u = found.FirstOrDefault(f => f.Id == id);
+            var name = u is null ? null : string.IsNullOrWhiteSpace(u.DisplayName) ? u.UserName : u.DisplayName;
+            cache.Set("author:" + id, name, TimeSpan.FromMinutes(5));
+            if (name is not null) result[id] = name;
+        }
+        return result;
     }
 
     /// <summary>Latest published posts of one blog, or of all blogs when <paramref name="blogId"/> is null.</summary>
@@ -83,4 +109,7 @@ public sealed class PublicContent(IDbContextFactory<AppDbContext> dbFactory, IMe
     }
 
     public void ForgetMedia(int id) => cache.Remove("media:url:" + id);
+
+    /// <summary>Call after a user's display name changes.</summary>
+    public void ForgetAuthor(int userId) => cache.Remove("author:" + userId);
 }

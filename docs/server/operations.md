@@ -33,7 +33,7 @@ sudo -u homepage env HOMEPAGE_CONFIG=/opt/homepage/config/appsettings.Production
 |---|---|
 | `--migrate-only` | Apply pending database migrations, then content migrations, and exit (also done at every start) |
 | `--create-local-account NAME` | Create an account with `admin: rw`; the password is read from stdin (first line, at least 10 characters) |
-| `--reset-local-password NAME` | Set a new password for an account and make it valid; the password is read from stdin. `install.sh --reset-password` wraps this. |
+| `--reset-local-password NAME` | Set a new password for an account, make it valid and turn off its two-factor sign-in; the password is read from stdin. `install.sh --reset-password` wraps this. |
 | `--list-local-accounts` | Print the accounts (`name<TAB>enabled\|disabled`) |
 
 Logs of these commands go to stderr; stdout carries only their own output.

@@ -39,7 +39,8 @@ public sealed class EndToEndTests(PostgresFixture pg)
             Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
             var dashboard = await client.GetStringAsync("/admin");
             token = Token(dashboard);
-            var groupId = Regex.Match(dashboard, "name=\"groupId\">\\s*<option value=\"(\\d+)\"").Groups[1].Value;
+            var gm = Regex.Match(dashboard, "name=\"groupId\"(?:\\s+value=\"(\\d+)\"|>\\s*<option value=\"(\\d+)\")");
+            var groupId = gm.Groups[1].Success ? gm.Groups[1].Value : gm.Groups[2].Value;
 
             // a POST without the token is refused
             Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/admin/content/new", Form(("title", "x"), ("type", "Page"), ("groupId", groupId)))).StatusCode);

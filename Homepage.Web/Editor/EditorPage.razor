@@ -12,6 +12,12 @@
             <button type="button" data-device="tablet">Tablet</button>
             <button type="button" data-device="phone">Phone</button>
         </div>
+        @if (Doc.Target.IsTheme && Doc.CanPublish)
+        {
+            <span class="muted small">Changes are saved as a draft of the theme.</span>
+            <a class="btn btn-sm" href="/admin/themes/@Doc.ThemeId">Theme</a>
+            <button type="button" class="btn-primary btn-sm" hx-post="/admin/themes/@Doc.ThemeId/publish" hx-swap="none">Publish</button>
+        }
         @if (Doc.Target.Kind == EditorTarget.ContentKind)
         {
             <a class="btn btn-sm" href="/admin/content/@Doc.Target.Id">Settings</a>

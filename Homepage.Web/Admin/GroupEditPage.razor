@@ -1,0 +1,55 @@
+@{ var isNew = Row is null; var noun = IsRoles ? "role" : "group"; }
+<AdminShell Title="@(isNew ? $"New {noun}" : Row!.Name)" Section="access" Back="@($"/admin/{Kind}")" BackText="@(IsRoles ? "Roles" : "Groups")">
+    <Badges>
+        @if (!isNew)
+        {
+            @if (Row!.IsSystem) { <span class="badge">system</span> }
+            @if (Row.Valid) { <span class="badge badge-ok">valid</span> } else { <span class="badge badge-off">invalid</span> }
+        }
+    </Badges>
+    <Actions>
+        @if (!isNew && IsRoles) { <a class="btn" href="/admin/permissions/role-groups?id=@Row!.Id">Edit its permissions</a> }
+    </Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <form method="post" action="/admin/@Kind" class="card narrow-card">
+        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+        @if (!isNew) { <input type="hidden" name="id" value="@Row!.Id" /> }
+        <label for="gn">Name</label>
+        <input id="gn" name="name" type="text" value="@Name" maxlength="100" required readonly="@(Row?.IsSystem == true)" autofocus="@isNew"
+               placeholder="@(IsRoles ? "Editors" : "marketing")" />
+        @if (Row?.IsSystem == true) { <div class="help">System groups cannot be renamed or made invalid.</div> }
+        else if (!IsRoles) { <div class="help">Lower case letters, digits and dashes.</div> }
+        <label for="gc">Comment</label>
+        <input id="gc" name="comment" type="text" value="@Comment" maxlength="500" placeholder="What it is for" />
+        @if (Row?.IsSystem == true)
+        {
+            <input type="hidden" name="valid" value="true" />
+        }
+        else
+        {
+            <label class="inline check"><input type="checkbox" name="valid" value="true" checked="@Valid" /> Valid</label>
+            <div class="help">@(IsRoles ? "An invalid role gives its users nothing." : "Nobody gets permissions on an invalid group; its content stays where it is.")</div>
+        }
+        @if (UsageNote is not null) { <p class="muted small">@UsageNote</p> }
+        <div class="form-actions">
+            <button class="btn-primary">@(isNew ? $"Create {noun}" : "Save")</button>
+            <a class="btn" href="/admin/@Kind">Cancel</a>
+        </div>
+    </form>
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter] public GroupsPage.Row? Row { get; set; }
+    [Parameter] public bool IsRoles { get; set; }
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Comment { get; set; } = "";
+    [Parameter] public bool Valid { get; set; } = true;
+    [Parameter] public string? UsageNote { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Kind => IsRoles ? "roles" : "groups";
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

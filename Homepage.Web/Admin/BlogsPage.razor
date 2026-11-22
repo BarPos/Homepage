@@ -1,64 +1,33 @@
-<AdminShell Title="Blogs" Section="blogs">
+<AdminShell Title="Blogs" Section="blogs" Subtitle="Each blog lists its posts at its own address and has its own RSS feed.">
+    <Actions><a class="btn btn-primary" href="/admin/blogs/new">New blog</a></Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
     @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
-    <p class="muted">Each blog lists its posts at its own address and has its own RSS feed (<code>/address/feed.xml</code>).
-        Posts live at <code>/address/post</code>. When you change an address, the old one keeps working and redirects to the new one.</p>
-    <div class="grid2">
-        @foreach (var b in Blogs)
-        {
-            <div class="card">
-                <form method="post" action="/admin/blogs">
-                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                    <input type="hidden" name="id" value="@b.Id" />
-                    <div class="toolbar" style="margin-bottom:0">
-                        <strong style="font-size:16px">@b.Name</strong>
-                        <span class="badge">@PostCounts.GetValueOrDefault(b.Id) posts</span>
-                        @if (b.Id == HomeBlogId) { <span class="badge badge-ok">home</span> }
-                        <span class="spacer"></span>
-                        <a class="btn btn-sm" href="/@b.Slug" target="_blank">View ↗</a>
-                    </div>
-                    <div class="form-row">
-                        <div><label for="n@(b.Id)">Name</label><input id="n@(b.Id)" name="name" type="text" value="@b.Name" maxlength="100" required /></div>
-                        <div><label for="s@(b.Id)">Address</label><input id="s@(b.Id)" name="slug" type="text" value="@b.Slug" maxlength="80" required /></div>
-                    </div>
-                    <label for="d@(b.Id)">Description</label>
-                    <input id="d@(b.Id)" name="description" type="text" value="@b.Description" maxlength="500" placeholder="Shown under the blog's title and in its feed" />
-                    <label for="p@(b.Id)">Posts per page</label>
-                    <input id="p@(b.Id)" name="postsPerPage" type="number" min="1" max="50" value="@b.PostsPerPage" style="max-width:120px" />
-                    @if (b.PreviousSlugs.Count > 0) { <div class="help">Old addresses that redirect here: @string.Join(", ", b.PreviousSlugs.Select(x => "/" + x))</div> }
-                    <div class="form-actions">
-                        <button class="btn-primary">Save</button>
-                        <a class="btn" href="/admin/content?type=post&blog=@b.Id">Posts</a>
-                    </div>
-                </form>
-                @if (PostCounts.GetValueOrDefault(b.Id) == 0 && Blogs.Count > 1)
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Blog</th><th>Address</th><th class="num">Posts</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var b in Blogs)
                 {
-                    <form method="post" action="/admin/blogs/@b.Id/delete" data-confirm="The blog has no posts. Its address becomes free for a page or another blog." data-confirm-title="Delete the blog '@b.Name'?" data-confirm-button="Delete blog" data-confirm-danger style="margin-top:8px">
-                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                        <button class="btn-sm btn-danger">Delete blog</button>
-                    </form>
+                    <tr>
+                        <td>
+                            <span class="badges"><a href="/admin/blogs/@b.Id"><strong>@b.Name</strong></a>@if (b.Id == HomeBlogId) { <span class="badge badge-ok" title="The home page shows this blog">home</span> }</span>
+                            @if (!string.IsNullOrEmpty(b.Description)) { <div class="muted small">@b.Description</div> }
+                        </td>
+                        <td><a href="/@b.Slug" target="_blank" rel="noopener"><code>/@b.Slug</code> ↗</a></td>
+                        <td class="num"><a href="/admin/content?type=post&blog=@b.Id">@PostCounts.GetValueOrDefault(b.Id)</a></td>
+                        <td class="right"><a class="btn btn-sm" href="/admin/blogs/@b.Id">Edit</a></td>
+                    </tr>
                 }
-            </div>
-        }
-        <div class="card">
-            <h2 style="margin-top:0">New blog</h2>
-            <form method="post" action="/admin/blogs">
-                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                <div class="form-row">
-                    <div><label for="nn">Name</label><input id="nn" name="name" type="text" maxlength="100" required placeholder="Releases" /></div>
-                    <div><label for="ns">Address</label><input id="ns" name="slug" type="text" maxlength="80" required placeholder="releases" /></div>
-                </div>
-                <label for="nd">Description</label><input id="nd" name="description" type="text" maxlength="500" />
-                <input type="hidden" name="postsPerPage" value="10" />
-                <div class="form-actions"><button class="btn-primary">Create blog</button></div>
-            </form>
-        </div>
+            </tbody>
+        </table>
     </div>
+    </ChildContent>
 </AdminShell>
 @code {
     [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
     [Parameter] public Dictionary<int, int> PostCounts { get; set; } = [];
     [Parameter] public int? HomeBlogId { get; set; }
+    [Parameter] public string? Message { get; set; }
     [Parameter] public string? Error { get; set; }
-    [CascadingParameter] public HttpContext? HttpContext { get; set; }
-    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
 }

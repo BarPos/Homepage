@@ -1,0 +1,29 @@
+<AdminShell Title="Set up two-factor sign-in" Section="profile">
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <div class="card setup-2fa">
+        <ol class="steps">
+            <li>
+                <strong>Scan this code</strong> with your authenticator app.
+                <div class="qr">@((MarkupString)QrSvg)</div>
+                <div class="help">Can't scan it? Enter this key by hand: <code class="key">@FormattedKey</code></div>
+            </li>
+            <li>
+                <strong>Enter the 6-digit code</strong> the app shows for this site.
+                <form method="post" action="/admin/profile/2fa" >
+                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                    <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required maxlength="7" class="code-input" aria-label="Code" />
+                    <button class="btn-primary">Turn on</button>
+                    <a class="btn" href="/admin/profile">Cancel</a>
+                </form>
+            </li>
+        </ol>
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public string QrSvg { get; set; } = "";
+    [Parameter] public string Key { get; set; } = "";
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    private string FormattedKey => string.Join(' ', Enumerable.Range(0, (Key.Length + 3) / 4).Select(i => Key.Substring(i * 4, Math.Min(4, Key.Length - i * 4))));
+}

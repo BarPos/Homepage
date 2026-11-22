@@ -6,16 +6,15 @@
             {
                 var url = PublicContent.Url(c.Type, c.Slug, c.BlogId, BlogSlugs);
                 <tr>
-                    <td><a href="/admin/editor/content-@c.Id"><strong>@c.Title</strong></a>
-                        @if (c.Id == HomePageId) { <span class="badge badge-ok" title="Shown at /">home</span> }
+                    <td><span class="badges"><a href="/admin/editor/content-@c.Id"><strong>@c.Title</strong></a>@if (c.Id == HomePageId) { <span class="badge badge-ok" title="Shown at /">home</span> }</span>
                         <div class="muted small">@url</div></td>
                     <td>@(c.Type == ContentType.Post ? "Post" : "Page")@if (c.BlogId is { } b && BlogNames.TryGetValue(b, out var bn)) { <div class="muted small">@bn</div> }</td>
                     <td><span class="badge">@Groups.GetValueOrDefault(c.GroupId, "?")</span></td>
-                    <td>
+                    <td><span class="badges">
                         @if (c.Status == ContentStatus.Published) { <span class="badge badge-ok">Published</span> }
                         else { <span class="badge">Draft</span> }
-                        @if (c.Status == ContentStatus.Published && c.DraftBlocks != c.Blocks) { <span class="badge badge-warn" title="The draft differs from the published version">changes</span> }
-                    </td>
+                        @if (c.Status == ContentStatus.Published && c.DraftBlocks != c.Blocks) { <span class="badge badge-warn" title="The draft differs from the published version">Unpublished changes</span> }
+                    </span></td>
                     <td class="nowrap muted">@c.UpdatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
                     <td class="right nowrap">
                         <a class="btn btn-sm" href="/admin/editor/content-@c.Id">Edit</a>
@@ -23,7 +22,7 @@
                     </td>
                 </tr>
             }
-            @if (Items.Count == 0) { <tr><td colspan="6" class="muted">Nothing here.</td></tr> }
+            @if (Items.Count == 0) { <tr><td colspan="6" class="empty-row muted">Nothing here yet.</td></tr> }
         </tbody>
     </table>
 </div>

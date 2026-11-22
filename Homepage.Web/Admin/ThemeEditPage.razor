@@ -1,8 +1,31 @@
 @{ var t = Tokens; }
-<AdminShell Title="@($"Theme: {Theme.Name}")" Section="themes" ShowTitle="false">
+<AdminShell Title="@Theme.Name" Section="themes" Back="/admin/themes" BackText="Themes">
     <Scripts><script src="@Asset.Url("js/theme-editor.js")" defer></script></Scripts>
+    <Badges>
+        @if (Theme.IsActive) { <span class="badge badge-ok">Active</span> }
+        @if (Theme.HasDraft) { <span class="badge badge-warn" title="Saved, but not live yet">Unpublished changes</span> }
+    </Badges>
+    <Actions>
+        @if (Theme.HasDraft)
+        {
+            <form method="post" action="/admin/themes/@Theme.Id/discard" data-confirm="The design, custom CSS, header and footer go back to the published version." data-confirm-title="Discard unpublished changes?" data-confirm-button="Discard" data-confirm-danger>
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <button>Discard changes</button>
+            </form>
+            <form method="post" action="/admin/themes/@Theme.Id/publish">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <button class="btn-primary">Publish</button>
+            </form>
+        }
+        else
+        {
+            <span class="muted small">Everything is published.</span>
+        }
+    </Actions>
     <ChildContent>
-    <div class="toolbar"><a class="btn btn-sm" href="/admin/themes">← Themes</a><strong>@Theme.Name</strong>@if (Theme.IsActive) { <span class="badge badge-ok">Active</span> }<span class="spacer"></span><span class="muted small">Preview updates as you change values; nothing is live until you save.</span></div>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <p class="muted small">The preview shows your changes as you make them. <strong>Save draft</strong> keeps them without changing the site; <strong>Publish</strong> makes them live@(Theme.IsActive ? "" : " when this theme is active").</p>
     <div class="theme-ed">
         <form id="theme-form" hx-post="/admin/themes/@Theme.Id" hx-swap="none">
             <div class="card">
@@ -19,7 +42,7 @@
             {
                 var colors = scheme == "light" ? t.Light : t.Dark;
                 <div class="card" data-scheme="@scheme">
-                    <h3 style="margin-top:0">@(scheme == "light" ? "Light colors" : "Dark colors")</h3>
+                    <h3 class="card-title">@(scheme == "light" ? "Light colors" : "Dark colors")</h3>
                     @foreach (var (key, label) in ThemeTokens.AllColors)
                     {
                         <div class="color-row">
@@ -31,7 +54,7 @@
                 </div>
             }
             <div class="card">
-                <h3 style="margin-top:0">Typography</h3>
+                <h3 class="card-title">Typography</h3>
                 @foreach (var (field, label, value) in new[] { ("bodyFont", "Body font", t.BodyFont), ("headingFont", "Heading font", t.HeadingFont) })
                 {
                     <label for="@field">@label</label>
@@ -47,7 +70,7 @@
                 <input id="lh" type="range" name="lineHeight" min="1.1" max="2.2" step="0.05" value="@Num(t.LineHeight)" data-preview />
             </div>
             <div class="card">
-                <h3 style="margin-top:0">Shape and spacing</h3>
+                <h3 class="card-title">Shape and spacing</h3>
                 <label for="rd">Corner radius <span class="muted" data-out="radius">@t.Radius px</span></label>
                 <input id="rd" type="range" name="radius" min="0" max="32" step="1" value="@Num(t.Radius)" data-preview />
                 <label for="sp">Spacing <span class="muted" data-out="spacingUnit">@t.SpacingUnit</span></label>
@@ -60,7 +83,7 @@
                 </select>
             </div>
             <div class="card">
-                <h3 style="margin-top:0">Glass and backdrop</h3>
+                <h3 class="card-title">Glass and backdrop</h3>
                 <label class="inline"><input type="checkbox" name="glass" value="true" checked="@t.Glass" data-preview /> Frosted glass surfaces</label>
                 <div class="help">Header, cards, quotes and glass sections become translucent and blur what is behind them.</div>
                 <label for="gb">Blur <span class="muted" data-out="glassBlur">@t.GlassBlur px</span></label>
@@ -74,14 +97,17 @@
                 <div class="help">Soft fields of the primary and accent colors behind the page. Glass looks best over a backdrop.</div>
             </div>
             <div class="card">
-                <h3 style="margin-top:0">Custom CSS</h3>
-                <textarea name="customCss" rows="8" placeholder=".site-header { … }">@Theme.CustomCss</textarea>
+                <h3 class="card-title">Custom CSS</h3>
+                <textarea name="customCss" rows="8" placeholder=".site-bar-inner { … }">@(Theme.DraftCustomCss ?? Theme.CustomCss)</textarea>
                 <div class="help">@@import and url() pointing to other sites are removed. Applied after saving.</div>
             </div>
-            <div class="form-actions" style="position:sticky;bottom:0;background:var(--bg);padding:10px 0">
-                <button class="btn-primary" type="submit">Save theme</button>
-                <a class="btn" href="/admin/editor/header-@Theme.Id">Edit header</a>
-                <a class="btn" href="/admin/editor/footer-@Theme.Id">Edit footer</a>
+            <div class="form-actions sticky-actions">
+                <button class="btn-primary" type="submit">Save draft</button>
+                @if (CanEditLayout)
+                {
+                    <a class="btn" href="/admin/editor/header-@Theme.Id">Edit header</a>
+                    <a class="btn" href="/admin/editor/footer-@Theme.Id">Edit footer</a>
+                }
             </div>
         </form>
         <iframe id="theme-preview" title="Theme preview" src="/admin/themes/@Theme.Id/preview"></iframe>
@@ -90,6 +116,11 @@
 </AdminShell>
 @code {
     [Parameter, EditorRequired] public Theme Theme { get; set; } = default!;
-    private ThemeTokens Tokens => ThemeTokens.Parse(Theme.Tokens);
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public bool CanEditLayout { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    private ThemeTokens Tokens => ThemeTokens.Parse(Theme.DraftTokens ?? Theme.Tokens);
     private static string Num(double d) => d.ToString("0.###", CultureInfo.InvariantCulture);
 }

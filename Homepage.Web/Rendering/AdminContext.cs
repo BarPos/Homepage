@@ -69,7 +69,7 @@ public sealed class AdminFilter(IPermissionService permissions, IAntiforgery ant
             DisplayName = http.User.FindFirstValue("display_name") ?? http.User.Identity?.Name ?? "",
             Perms = perms,
             CsrfToken = tokens.RequestToken ?? "",
-            Ip = http.Connection.RemoteIpAddress?.ToString(),
+            Ip = AuditRequestInfo.Normalize(http.Connection.RemoteIpAddress),
         };
         return await next(context);
     }
@@ -95,5 +95,7 @@ public static class AdminAuth
     public const string StampClaim = "hp_stamp";
     /// <summary>Sign-in time (Unix seconds); sessions end after <see cref="MaxSessionAge"/> even while in use.</summary>
     public const string IssuedClaim = "hp_issued";
+    /// <summary>The client address at sign-in, recorded with every audit entry of the session.</summary>
+    public const string SignInIpClaim = "hp_ip";
     public static readonly TimeSpan MaxSessionAge = TimeSpan.FromHours(12);
 }

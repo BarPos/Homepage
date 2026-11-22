@@ -1,0 +1,14 @@
+<AdminShell Title="Recovery codes" Section="profile">
+    <div class="card">
+        @if (JustEnabled) { <div class="inline-alert ok">Two-factor sign-in is on.</div> }
+        <p>Keep these codes somewhere safe, such as your password manager. Each one signs you in once if you lose your phone. <strong>They are shown only now.</strong></p>
+        <ul class="recovery-codes">
+            @foreach (var c in Codes) { <li><code>@c</code></li> }
+        </ul>
+        <div class="form-actions"><a class="btn btn-primary" href="/admin/profile">I saved them</a></div>
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public IReadOnlyList<string> Codes { get; set; } = [];
+    [Parameter] public bool JustEnabled { get; set; }
+}

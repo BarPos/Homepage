@@ -12,7 +12,8 @@ nav_order: 4
 
 ## Media
 
-**Media → Upload**: one or more files, and the group they belong to (a group where you have `create`).
+**Media → Upload files** opens a dialog: one or more files, and the group they belong to (a group where you have
+`create`; left out when there is only one).
 
 - **Accepted:** PNG, JPEG, GIF, WebP, AVIF and ICO images and PDF files, up to 20 MiB each.
 - The type is checked from the **file's content**, not its name: a script renamed to `.png` is refused. SVG is not
@@ -48,9 +49,13 @@ Deleting a file does not check where it is used. Image blocks that show it becom
 | `main` | The *Menu* block in the default header's site bar |
 | `footer` | The *Menu* block in the default footer |
 
-- **New menu:** a name and an optional key (made from the name when empty). A *Menu* block can then show it anywhere:
-  a page, the header or the footer.
-- **Rename** a menu in its name field; the key stays, so blocks keep pointing at it.
-- **Delete menu** removes it. *Menu* blocks that showed it render nothing until you pick another menu.
-- Each link is a label and an address: `/path`, `#anchor`, `https://…`, `http://…`, `mailto:` or `tel:`. Anything
-  else is refused. **Add link**, **✕** to remove, **Save menu**. The public site updates at once.
+The **Menus** page lists the menus with their links. **Edit** opens a menu in the menu editor; **New menu** opens an
+empty one.
+
+- **Name** and **key**. The key is made from the name when empty, cannot be `new`, and cannot be changed later; a
+  *Menu* block refers to the menu by its key, anywhere: a page, the header or the footer.
+- **Links:** each is a label and an address: `/path`, `#anchor`, `https://…`, `http://…`, `mailto:` or `tel:`.
+  Anything else is refused, and the editor keeps what you typed. **+ Add link**, **↑** / **↓** to reorder, **✕** to
+  remove, then **Create menu** or **Save menu**. The public site updates at once.
+- **Delete menu** (in the editor) removes it. *Menu* blocks that showed it render nothing until you pick another
+  menu.

@@ -154,7 +154,7 @@ Each item also has a flag:
 | `install.sh --upgrade --package FILE` | Installs a newer release through the same path as the admin's *Update now* |
 | `install.sh --backup [--output PATH]` | Backs up the database, configuration, data (media, keys) and the running program (see [Backup and restore](operations.md#backup-and-restore)) |
 | `install.sh --restore FILE` | Restores a backup on this server (asks for confirmation; `--yes` when unattended) |
-| `install.sh --reset-password [USER]` | Sets a new password for an account and makes it valid. Without `USER` it lists the accounts and asks. Unattended: `HOMEPAGE_ADMIN_PASSWORD` or `--secrets-file`. |
+| `install.sh --reset-password [USER]` | Sets a new password for an account, makes it valid and turns off its two-factor sign-in. Without `USER` it lists the accounts and asks. Unattended: `HOMEPAGE_ADMIN_PASSWORD` or `--secrets-file`. |
 | `install.sh --uninstall` | Removes **everything**: program, services, `/opt/homepage` (config, media, keys, backups), the service user **and the database** |
 | `install.sh --uninstall --keep-data` | Removes only the program and its services; keeps config, data, backups and the database |
 

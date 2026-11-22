@@ -10,6 +10,7 @@
     <meta name="theme-color" content="@Ctx.Theme.Tokens.Dark["bg"]" media="(prefers-color-scheme: dark)" />
     <title>@(string.IsNullOrWhiteSpace(Title) ? Ctx.Site.Title : $"{Title} · {Ctx.Site.Title}")</title>
     @if (!string.IsNullOrWhiteSpace(Description)) { <meta name="description" content="@Description" /> }
+    @if (!string.IsNullOrWhiteSpace(Author)) { <meta name="author" content="@Author" /> }
     <meta property="og:title" content="@(Title ?? Ctx.Site.Title)" />
     <meta property="og:site_name" content="@Ctx.Site.Title" />
     @if (!string.IsNullOrWhiteSpace(Description)) { <meta property="og:description" content="@Description" /> }
@@ -61,6 +62,7 @@
 @code {
     [Parameter] public string? Title { get; set; }
     [Parameter] public string? Description { get; set; }
+    [Parameter] public string? Author { get; set; }
     [Parameter] public string? CanonicalUrl { get; set; }
     [Parameter] public bool UseHtmx { get; set; }
     /// <summary>The editor canvas (loads Sortable; the parent editor page drives it).</summary>

@@ -1,53 +1,40 @@
-<AdminShell Title="Menus" Section="menus">
+<AdminShell Title="Menus" Section="menus" Subtitle="A Menu block in a page, the header or the footer shows one of these menus.">
+    <Actions><a class="btn btn-primary" href="/admin/menus/new">New menu</a></Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
     @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
-    <p class="muted">A <strong>Menu</strong> block (in a page, the header or the footer) shows one of these menus. Deleting a menu empties the blocks that show it.</p>
-    <div class="grid2">
-        @foreach (var m in Menus)
-        {
-            var links = MenuService.Parse(m.Items).ToList();
-            <div class="card" x-data="{ rows: @RowsJson(links) }">
-                <form method="post" action="/admin/menus/@m.Key">
-                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                    <div class="toolbar" style="margin-bottom:6px">
-                        <input type="text" name="name" value="@m.Name" maxlength="100" aria-label="Menu name" style="max-width:220px;font-weight:600" />
-                        <span class="muted small">key: <code>@m.Key</code></span>
-                    </div>
-                    <template x-for="(row, i) in rows" :key="i">
-                        <div class="form-row" style="grid-template-columns:1fr 1.4fr auto;margin-bottom:6px">
-                            <input type="text" name="label" x-model="row.label" placeholder="Label" />
-                            <input type="text" name="url" x-model="row.url" placeholder="/page or https://…" />
-                            <button type="button" class="btn-sm" x-on:click="rows.splice(i, 1)" title="Remove link">✕</button>
-                        </div>
-                    </template>
-                    <div class="form-actions">
-                        <button type="button" x-on:click="rows.push({ label: '', url: '' })">Add link</button>
-                        <button class="btn-primary">Save menu</button>
-                    </div>
-                </form>
-                <form method="post" action="/admin/menus/@m.Key/delete" data-confirm="Menu blocks that show it become empty." data-confirm-title="Delete the menu '@m.Name'?" data-confirm-button="Delete menu" data-confirm-danger style="margin-top:8px">
-                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                    <button class="btn-sm btn-danger">Delete menu</button>
-                </form>
-            </div>
-        }
-        <div class="card">
-            <h2 style="margin-top:0">New menu</h2>
-            <form method="post" action="/admin/menus">
-                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                <div class="form-row">
-                    <div><label for="mn">Name</label><input id="mn" name="name" type="text" maxlength="100" required placeholder="Social links" /></div>
-                    <div><label for="mk">Key (optional)</label><input id="mk" name="key" type="text" maxlength="50" placeholder="social" /></div>
-                </div>
-                <div class="form-actions"><button class="btn-primary">Create menu</button></div>
-            </form>
+    @if (Menus.Count == 0)
+    {
+        <div class="card empty-state">
+            <h2>No menus yet</h2>
+            <p class="muted">Make one, then show it with a Menu block in the header.</p>
+            <a class="btn btn-primary" href="/admin/menus/new">New menu</a>
         </div>
-    </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Menu</th><th>Key</th><th>Links</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var m in Menus)
+                    {
+                        var links = MenuService.Parse(m.Items);
+                        <tr>
+                            <td><a href="/admin/menus/@m.Key"><strong>@m.Name</strong></a></td>
+                            <td><code>@m.Key</code></td>
+                            <td class="muted">@if (links.Count == 0) { <span>No links</span> } else { <span>@string.Join(" · ", links.Take(6).Select(l => l.Label))@(links.Count > 6 ? $" and {links.Count - 6} more" : "")</span> }</td>
+                            <td class="right"><a class="btn btn-sm" href="/admin/menus/@m.Key">Edit</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    </ChildContent>
 </AdminShell>
 @code {
     [Parameter] public List<Menu> Menus { get; set; } = [];
+    [Parameter] public string? Message { get; set; }
     [Parameter] public string? Error { get; set; }
-    [CascadingParameter] public HttpContext? HttpContext { get; set; }
-    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
-    private static string RowsJson(List<MenuLink> links) =>
-        System.Text.Json.JsonSerializer.Serialize(links.Select(l => new { label = l.Label, url = l.Url }));
 }

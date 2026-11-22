@@ -150,8 +150,15 @@ public sealed class Theme
     public string CustomCss { get; set; } = "";
     public string HeaderBlocks { get; set; } = "";
     public string FooterBlocks { get; set; } = "";
+    // Unpublished changes. Null = no draft for that part; the editors work on draft ?? live, Publish copies to live.
+    public string? DraftTokens { get; set; }
+    public string? DraftCustomCss { get; set; }
+    public string? DraftHeaderBlocks { get; set; }
+    public string? DraftFooterBlocks { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
     public uint Version { get; set; }
+
+    public bool HasDraft => DraftTokens is not null || DraftCustomCss is not null || DraftHeaderBlocks is not null || DraftFooterBlocks is not null;
 }
 
 public sealed class Setting
@@ -169,7 +176,10 @@ public sealed class AuditEntry
     public string Entity { get; set; } = "";
     public string EntityId { get; set; } = "";
     public string Details { get; set; } = "";
+    /// <summary>Client address of the request that caused the entry.</summary>
     public string? Ip { get; set; }
+    /// <summary>Address the acting user signed in from (their session), when known.</summary>
+    public string? SignInIp { get; set; }
 }
 
 public enum UpdateState { Downloading = 0, Staged = 1, Applying = 2, Succeeded = 3, RolledBack = 4, Failed = 5 }

@@ -4,8 +4,8 @@
             <option value="">Everything</option>
             @foreach (var (key, label) in Areas) { <option value="@key" selected="@(key == Url["area"])">@label</option> }
         </select>
-        <input type="date" name="from" value="@Url["from"]" aria-label="From" style="max-width:160px" />
-        <input type="date" name="to" value="@Url["to"]" aria-label="To" style="max-width:160px" />
+        <input type="date" name="from" value="@Url["from"]" aria-label="From" class="date-input" />
+        <input type="date" name="to" value="@Url["to"]" aria-label="To" class="date-input" />
     </ListFilters>
     <div id="list">
     <div class="table-wrap">
@@ -14,7 +14,7 @@
             <tbody>
                 @foreach (var a in Result.Items)
                 {
-                    <tr><td class="nowrap muted">@a.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td><td>@a.Actor</td><td><code>@a.Action</code></td><td>@a.Entity @a.EntityId</td><td>@a.Details</td><td class="muted small">@a.Ip</td></tr>
+                    <tr><td class="nowrap muted">@a.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td><td>@a.Actor</td><td><code>@a.Action</code></td><td>@a.Entity @a.EntityId</td><td>@a.Details</td><td class="muted small nowrap">@a.Ip@if (!string.IsNullOrEmpty(a.SignInIp) && a.SignInIp != a.Ip) { <div title="The address this user signed in from">signed in from @a.SignInIp</div> }</td></tr>
                 }
                 @if (Result.Total == 0) { <tr><td colspan="6" class="muted">No entries match.</td></tr> }
             </tbody>

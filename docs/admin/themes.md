@@ -35,7 +35,17 @@ copies are never touched by updates.
 
 ## Design tokens
 
-**Edit design** on a copied theme. The preview on the right changes as you edit; nothing is live until **Save theme**.
+**Edit design** on a copied theme. The preview on the right changes as you edit.
+
+### Drafts and publishing
+
+Theme changes work like pages: you edit a **draft**, and the site changes only when you **Publish**.
+- **Save draft** keeps the design and custom CSS without changing the site. The theme is marked *Unpublished changes*
+  in the list and in the editor.
+- Header and footer edits in the visual editor are drafts too; the editor has a **Publish** button for them.
+- **Publish** makes all of the theme's drafts live at once (design needs `themes: rw`, header and footer need
+  `layout: rw`). **Discard changes** goes back to the published version.
+- Drafts are not written to the audit log; publishing and discarding are, as one entry each.
 
 | Group | Token | Range |
 |---|---|---|
@@ -86,9 +96,10 @@ Classes worth targeting: `.site-bar`, `.site-bar-inner`, `.site-brand`, `.site-l
 
 **Header** / **Footer** open the theme's header or footer in the [visual editor](editor.md). The default header is a
 *Site bar* with a *Logo / site name* block and the `main` menu; the default footer is a section with the `footer`
-menu and a line of text. Changes to the active theme are live immediately. See [Blocks](blocks.md#site-bar).
+menu and a line of text. Edits are kept as a draft until you **Publish** (see [Drafts and publishing](#drafts-and-publishing)).
+See [Blocks](blocks.md#site-bar).
 
 ## How it is served
 
-The tokens become CSS custom properties at `/theme/<id>/<version>.css`. Every save increases the version, so the URL
+The tokens become CSS custom properties at `/theme/<id>/<version>.css`. Every publish increases the version, so the URL
 changes and browsers may cache each version for a year. The site stylesheet uses only those variables.

@@ -44,6 +44,7 @@ public sealed class MenuService(IDbContextFactory<AppDbContext> dbFactory, IMemo
         if (name.Length is 0 or > 100) throw new BlockException("The menu name must be 1 to 100 characters.");
         key = Slug.From(string.IsNullOrWhiteSpace(key) ? name : key);
         if (key.Length is 0 or > 50) throw new BlockException("The menu key must be 1 to 50 letters, digits or dashes.");
+        if (key == "new") throw new BlockException("'new' cannot be a menu key.");
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (await db.Menus.AnyAsync(m => m.Key == key, ct)) throw new ConflictException($"A menu '{key}' already exists.");
         var menu = new Menu { Key = key, Name = name, Items = "[]" };

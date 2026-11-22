@@ -34,7 +34,8 @@ All under `/admin`, signed in (except `login`), never cached. POST requests need
 
 | URL | |
 |---|---|
-| `/admin/login`, `/admin/logout` | Sign in and out |
+| `/admin/login`, `/admin/login/2fa`, `/admin/logout` | Sign in (password, then the two-factor code when turned on) and out |
+| `/admin/profile` | Your profile; `/password`, `/2fa` (setup), `/2fa/recovery`, `/2fa/disable` (POST) |
 | `/admin` | Dashboard |
 | `/admin/content?type=page\|post&q=&group=&blog=&status=&sort=&size=&page=` | Lists (`status`: `draft`, `published`, `changed`; `sort`: `title`, `published`) |
 | `/admin/content/new` (POST) | Create |
@@ -44,13 +45,13 @@ All under `/admin`, signed in (except `login`), never cached. POST requests need
 | `/admin/editor/<target>/ops` (POST, JSON) | `{"op":"insert\|move\|delete\|duplicate","id":…,"type":…,"parentId":…,"index":…}` |
 | `/admin/editor/<target>/props/<blockId>` (POST, form) | Inspector values, `p.<Property>` |
 | `/admin/media?q=&group=&kind=&size=&page=` | Media; upload (POST, multipart), `/<id>/delete` |
-| `/admin/themes`, `/admin/themes/<id>` | Themes, design editor; `/preview`, `/activate`, `/duplicate` |
-| `/admin/menus`, `/admin/menus/<key>`, `/<key>/delete` | Menus: create (POST `/admin/menus`), save, delete |
-| `/admin/blogs`, `/admin/blogs/<id>/delete` | Blogs: create or save (POST `/admin/blogs`), delete |
-| `/admin/users?q=&status=&role=`, `/admin/users/<id>`, `/password` | Users |
-| `/admin/groups?q=&status=`, `/admin/roles?q=&status=` | Groups and roles |
+| `/admin/themes`, `/admin/themes/<id>` | Themes, design editor (POST saves the draft); `/preview`, `/publish`, `/discard`, `/activate`, `/duplicate` |
+| `/admin/menus`, `/admin/menus/new`, `/admin/menus/<key>`, `/<key>/delete` | Menus: list, empty editor, editor; create (POST `/admin/menus`), save, delete |
+| `/admin/blogs`, `/admin/blogs/new`, `/admin/blogs/<id>`, `/<id>/delete` | Blogs: list, empty editor, editor; create or save (POST `/admin/blogs`), delete |
+| `/admin/users?q=&status=&role=`, `/admin/users/new`, `/admin/users/<id>`, `/password`, `/2fa/disable` | Users (`q` also matches email) |
+| `/admin/groups?q=&status=`, `/admin/groups/new`, `/admin/groups/<id>`; the same under `/admin/roles` | Groups and roles: lists and editors |
 | `/admin/permissions/user-groups`, `/role-groups`, `/user-roles` | The relation screens |
 | `/admin/settings`, `/admin/updates/check` | Settings, release check |
 | `/admin/updates/apply` (POST) | Stage an update; with `Accept: application/json` answers `{"ok":true,"from":…,"to":…}` or `{"error":…}` |
 | `/admin/updates/status` | `{"version":…,"run":{"state","from","to","message","finishedAt"}}`, polled by the progress dialog |
-| `/admin/audit?q=&area=&from=&to=` | Audit log |
+| `/admin/audit?q=&area=&from=&to=` | Audit log (`q` also matches IP addresses) |

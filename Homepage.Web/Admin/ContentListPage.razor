@@ -1,7 +1,14 @@
 <AdminShell Title="@(Type == ContentType.Post ? "Posts" : "Pages")" Section="@(Type == ContentType.Post ? "posts" : "pages")">
+    <Actions>
+        @if (CreateGroups.Count > 0)
+        {
+            <button type="button" class="btn-primary" data-open-dialog="new-content" data-dialog-type="@Type">@(Type == ContentType.Post ? "New post" : "New page")</button>
+        }
+    </Actions>
+    <ChildContent>
     @if (CreateGroups.Count > 0)
     {
-        <div class="card"><NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Type="Type" Blogs="Blogs" /></div>
+        <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Type="Type" Blogs="Blogs" BlogId="@(int.TryParse(Url["blog"], out var fb) ? fb : null)" />
     }
     <ListFilters Url="Url" Placeholder="Search titles and addresses…">
         <input type="hidden" name="type" value="@Type" />
@@ -32,6 +39,7 @@
         <ContentTable Items="Result.Items" Groups="Groups" BlogSlugs="BlogSlugs" BlogNames="BlogNames" HomePageId="HomePageId" />
         <Pager Url="Url" Page="Result.Page" TotalPages="Result.TotalPages" Total="Result.Total" From="Result.From" To="Result.To" />
     </div>
+    </ChildContent>
 </AdminShell>
 @code {
     [Parameter] public ContentType Type { get; set; }

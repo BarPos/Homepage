@@ -2,10 +2,10 @@
     <Scripts><script src="@Asset.Url("js/update-progress.js")" defer></script></Scripts>
     <ChildContent>
     @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
-    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert" style="border-color:var(--ok);color:var(--ok)">@Message</div> }
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
     <div class="grid2">
         <div class="card">
-            <h2 style="margin-top:0">Site</h2>
+            <h2 class="card-title">Site</h2>
             <form method="post" action="/admin/settings">
                 <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                 <label for="t">Site title</label><input id="t" name="title" type="text" value="@S.Title" maxlength="200" required />
@@ -48,7 +48,7 @@
             </form>
         </div>
         <div class="card">
-            <h2 style="margin-top:0">About and updates</h2>
+            <h2 class="card-title">About and updates</h2>
             <p>Version <strong>@Update.CurrentVersion</strong></p>
             @if (!Update.Configured)
             {
@@ -61,10 +61,10 @@
                 @if (Update.LastError is { } err) { <p class="inline-alert">@err</p> }
                 @if (Update.Latest?.Notes is { Length: > 0 } notes) { <details><summary>Release notes</summary><pre style="white-space:pre-wrap">@notes</pre></details> }
                 <div class="form-actions">
-                    <form method="post" action="/admin/updates/check" style="margin:0"><input type="hidden" name="__RequestVerificationToken" value="@Token" /><button>Check now</button></form>
+                    <form method="post" action="/admin/updates/check"><input type="hidden" name="__RequestVerificationToken" value="@Token" /><button>Check now</button></form>
                     @if (Update.UpdateAvailable)
                     {
-                        <form method="post" action="/admin/updates/apply" style="margin:0" data-update-form
+                        <form method="post" action="/admin/updates/apply" data-update-form
                               data-from="@Update.CurrentVersion" data-to="@Update.Latest?.Version"
                               data-confirm="The database is backed up first, then the site restarts with the new version. It is unavailable for a short while; if the new version does not start, the old one comes back automatically."
                               data-confirm-title="@UpdateTitle" data-confirm-button="Update now">

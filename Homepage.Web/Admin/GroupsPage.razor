@@ -1,7 +1,10 @@
 <AdminShell Title="Users & permissions" Section="access">
-    <AccessTabs Active="@(IsRoles ? "roles" : "groups")" />
+    <Actions><a class="btn btn-primary" href="/admin/@Kind/new">@(IsRoles ? "New role" : "New group")</a></Actions>
+    <ChildContent>
+    <AccessTabs Active="@Kind" />
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
     @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
-    <p class="muted">
+    <p class="muted intro">
         @if (IsRoles) { <text>Roles bundle group permissions. Give a role permissions under Roles ↔ Groups, and assign it to users under Users ↔ Roles.</text> }
         else { <text>Every page, post and media file belongs to a group. System groups gate admin areas and cannot be renamed.</text> }
     </p>
@@ -15,48 +18,32 @@
     <div id="list">
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Name</th><th>Comment</th><th>Valid</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Comment</th><th>Status</th><th></th></tr></thead>
             <tbody>
                 @foreach (var r in Result.Items)
                 {
                     <tr>
-                        <td colspan="4" style="padding:0">
-                            <form method="post" action="@(IsRoles ? "/admin/roles" : "/admin/groups")" class="form-row" style="grid-template-columns:1fr 2fr auto auto;align-items:center;padding:6px 10px;margin:0">
-                                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                                <input type="hidden" name="id" value="@r.Id" />
-                                <div><input type="text" name="name" value="@r.Name" readonly="@r.IsSystem" maxlength="100" />@if (r.IsSystem) { <span class="badge small">system</span> }</div>
-                                <input type="text" name="comment" value="@r.Comment" maxlength="500" />
-                                <label class="inline"><input type="checkbox" name="valid" value="true" checked="@r.Valid" disabled="@r.IsSystem" />@if (r.IsSystem) { <input type="hidden" name="valid" value="true" /> } valid</label>
-                                <button class="btn-sm">Save</button>
-                            </form>
-                        </td>
+                        <td><span class="badges"><a href="/admin/@Kind/@r.Id"><strong>@r.Name</strong></a>@if (r.IsSystem) { <span class="badge">system</span> }</span></td>
+                        <td class="muted">@r.Comment</td>
+                        <td>@if (r.Valid) { <span class="badge badge-ok">valid</span> } else { <span class="badge badge-off">invalid</span> }</td>
+                        <td class="right"><a class="btn btn-sm" href="/admin/@Kind/@r.Id">Edit</a></td>
                     </tr>
                 }
-                <tr>
-                    <td colspan="4" style="padding:0">
-                        <form method="post" action="@(IsRoles ? "/admin/roles" : "/admin/groups")" class="form-row" style="grid-template-columns:1fr 2fr auto auto;align-items:center;padding:6px 10px;margin:0">
-                            <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-                            <input type="text" name="name" placeholder="@(IsRoles ? "New role" : "new-group")" required maxlength="100" />
-                            <input type="text" name="comment" placeholder="Comment" maxlength="500" />
-                            <input type="hidden" name="valid" value="true" />
-                            <span></span>
-                            <button class="btn-primary btn-sm">Add</button>
-                        </form>
-                    </td>
-                </tr>
+                @if (Result.Total == 0) { <tr><td colspan="4" class="muted">Nothing matches.</td></tr> }
             </tbody>
         </table>
     </div>
     <Pager Url="Url" Page="Result.Page" TotalPages="Result.TotalPages" Total="Result.Total" From="Result.From" To="Result.To" />
     </div>
+    </ChildContent>
 </AdminShell>
 @code {
     public sealed record Row(int Id, string Name, string Comment, bool Valid, bool IsSystem);
     [Parameter, EditorRequired] public PagedResult<Row> Result { get; set; } = default!;
     [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
     [Parameter] public bool IsRoles { get; set; }
-    private string SearchHint => IsRoles ? "Search roles…" : "Search groups…";
+    [Parameter] public string? Message { get; set; }
     [Parameter] public string? Error { get; set; }
-    [CascadingParameter] public HttpContext? HttpContext { get; set; }
-    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    private string Kind => IsRoles ? "roles" : "groups";
+    private string SearchHint => IsRoles ? "Search roles…" : "Search groups…";
 }

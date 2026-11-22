@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Homepage;
 
@@ -51,6 +52,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<MarkdownRenderer>();
         services.AddSingleton<ContentExtractor>();
         services.AddSingleton<IAuditLog, AuditLog>();
+        services.TryAddSingleton<IAuditRequestInfo, NoAuditRequestInfo>(); // the web host registers the real one first
         services.AddSingleton<IPermissionService, PermissionService>();
         services.AddSingleton<ContentService>();
         services.AddSingleton<ThemeService>();

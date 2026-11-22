@@ -23,25 +23,39 @@ you may not see is not listed, a button you may not use is not shown, and the se
 - An account that is **invalid**, or that has no permission on any group, cannot sign in.
 - A session ends after 8 hours without activity, 12 hours after sign-in, or when the password is reset or the account
   made invalid. Permissions are checked on every request, so taking a role away takes effect on the user's next click.
-- Lost the only admin password? On the server: `sudo bash install.sh --reset-password`.
+- With [two-factor sign-in](#your-profile) turned on, the password is followed by a 6-digit code from an
+  authenticator app, or one of the account's recovery codes. The code step has the same limits as the password.
+- Lost the only admin password, or the phone with the authenticator? On the server:
+  `sudo bash install.sh --reset-password`. It also turns two-factor sign-in off for that account.
 
-{: .note }
-Two-factor sign-in is not available yet.
+## Your profile
+
+Your name in the top bar opens **Your profile**:
+
+| Section | |
+|---|---|
+| Account | **Display name** (shown in the admin and as the author of your posts) and **email**. The user name you sign in with is changed only by an administrator. |
+| Password | Current password, new password twice. Your other sessions end; this one continues. |
+| Two-factor sign-in | **Set up**: scan the QR code with an authenticator app (1Password, Bitwarden, Google Authenticator, …) or type the key, then enter the code it shows. You get **10 recovery codes**, shown once: keep them in your password manager. Each signs you in once without the phone. **New recovery codes** replaces them. **Turn off** asks for your password. |
+
+An administrator can turn two-factor sign-in off for another account (**Users → Edit**), for example after a lost
+phone.
 
 ## Pages
 
 | Page | |
 |---|---|
-| **Dashboard** | Counts of pages, posts and drafts you can see, the active theme, a form to create a page or post, recently changed items |
-| **Pages**, **Posts** | Lists with search, filters (group, blog, status), sorting and paging. *changes* marks a published item whose draft differs; *home* marks the home page. **Edit** opens the [visual editor](editor.md), **Settings** the item's settings. |
+| **Dashboard** | Counts of pages, posts and drafts you can see, the active theme, **New page** / **New post**, recently changed items |
+| **Pages**, **Posts** | Lists with search, filters (group, blog, status), sorting and paging. *Unpublished changes* marks a published item whose draft differs; *home* marks the home page. **Edit** opens the [visual editor](editor.md), **Settings** the item's settings. |
 | Item settings | Title, address (slug), excerpt, blog (posts), group; publish, unpublish, delete; *Use as home page* (pages); published revisions |
-| **Media** | Upload images and PDFs, search, filter and delete files (see [Media and menus](media-menus.md)) |
-| **Themes** | Activate, duplicate, edit design, header and footer (see [Themes](themes.md)) |
-| **Menus** | Create, rename and delete menus and edit their links (needs `layout: rw`) |
-| **Blogs** | Create blogs, change their addresses (see [Blogs](blogs.md), needs `layout: rw`) |
-| **Users & permissions** | Users, Groups, Roles, and the three relation screens (needs `admin: rw`, see [Permissions](../permissions.md)) |
+| **Media** | **Upload files**, search, filter and delete files (see [Media and menus](media-menus.md)) |
+| **Themes** | Activate, duplicate, edit design, header and footer as drafts, publish (see [Themes](themes.md)) |
+| **Menus** | A list of menus; **New menu** and **Edit** open the menu editor (see [Media and menus](media-menus.md#menus), needs `layout: rw`) |
+| **Blogs** | A list of blogs; **New blog** and **Edit** open the blog editor (see [Blogs](blogs.md), needs `layout: rw`) |
+| **Users & permissions** | Users, Groups, Roles (each a list with **Add account** / **New group** / **New role** and an editor page), and the three relation screens (needs `admin: rw`, see [Permissions](../permissions.md)) |
+| **Your profile** | Your display name, email, password and two-factor sign-in (every user) |
 | **Settings** | Site title, tagline, logo, favicon, public address, home page, default group; version and updates (needs `admin: rw`) |
-| **Audit log** | Who signed in, created, published, deleted, changed themes, menus, settings and permissions (needs `audit: ro`) |
+| **Audit log** | Who signed in, created, published, deleted, published themes, changed menus, settings, accounts and permissions, and from which address. Each entry has the request's IP, and *signed in from* when the user's session started at another address. Drafts (content autosave, theme drafts) are not logged; publishing is (needs `audit: ro`) |
 
 ## Lists
 
@@ -56,13 +70,18 @@ URL, so a view can be bookmarked or shared. The relation screens under **Users &
 
 ## Creating content
 
-On the **Dashboard** or the **Pages** / **Posts** list: title, type (*Page* or *Blog post*), group, **Create and
-edit**. The group list offers only groups where you have `create`.
+**New page** or **New post** on the **Dashboard** or the **Pages** / **Posts** list opens a dialog: title, type
+(*Page* or *Blog post*), blog (posts), group, **Create and edit**. The group list offers only groups where you have
+`create`, and is left out when there is only one.
 
 - A **page** starts with a section holding its title as a heading. Pages live at `/<slug>`.
 - A **post** starts with one empty Markdown block and belongs to a **blog**, chosen when you create it (the form
   shows a blog list for posts). Posts live at `/<blog>/<slug>`, for example `/blog/hello-world` or
   `/releases/version-2`, and appear in that blog, its RSS feed and *Latest posts* blocks.
+- A post shows its **author**: the display name of the account that created it, on the post, in post lists and as
+  `dc:creator` in the feeds. The display name starts out as the user name, so set one on **Your profile** if your
+  login name should not be public. Posts whose account was deleted, and the example post made at install, show no
+  author.
 - The address is made from the title (`About us` → `/about-us`) and can be changed in the item's settings.
   - **Pages and blogs share the first part of the address**: a page cannot take a blog's address and the other way
     round. A page titled like a blog gets a number (`/releases-2`).

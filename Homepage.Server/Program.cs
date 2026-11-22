@@ -131,7 +131,8 @@ if (resetName is not null)
         return 1;
     }
     if (!user.Valid) await accounts.SetValidAsync(user.Id, true, "install.sh");
-    Console.WriteLine($"The password of '{user.UserName}' was reset{(user.Valid ? "" : " and the account enabled")}.");
+    if (user.TwoFactorEnabled) await accounts.DisableTwoFactorAsync(user.Id, "install.sh");
+    Console.WriteLine($"The password of '{user.UserName}' was reset{(user.Valid ? "" : " and the account enabled")}{(user.TwoFactorEnabled ? "; two-factor sign-in is off" : "")}.");
     return 0;
 }
 

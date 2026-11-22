@@ -1,21 +1,24 @@
 <AdminShell Title="Dashboard" Section="dashboard">
+    <Actions>
+        @if (CreateGroups.Count > 0)
+        {
+            <button type="button" data-open-dialog="new-content" data-dialog-type="Page">New page</button>
+            <button type="button" class="btn-primary" data-open-dialog="new-content" data-dialog-type="Post">New post</button>
+        }
+    </Actions>
+    <ChildContent>
     <div class="stats">
-        <div class="stat"><span class="muted">Pages</span><strong>@Pages</strong></div>
-        <div class="stat"><span class="muted">Posts</span><strong>@Posts</strong></div>
+        <a class="stat" href="/admin/content?type=page"><span class="muted">Pages</span><strong>@Pages</strong></a>
+        <a class="stat" href="/admin/content?type=post"><span class="muted">Posts</span><strong>@Posts</strong></a>
         <div class="stat"><span class="muted">Drafts</span><strong>@Drafts</strong></div>
-        <div class="stat"><span class="muted">Active theme</span><strong style="font-size:17px">@ThemeName</strong></div>
+        <a class="stat" href="/admin/themes"><span class="muted">Active theme</span><strong class="stat-text">@ThemeName</strong></a>
     </div>
-    @if (CreateGroups.Count > 0)
-    {
-        <div class="card">
-            <h2 style="margin-top:0">Create</h2>
-            <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Blogs="Blogs" />
-        </div>
-    }
-    <div class="card">
-        <h2 style="margin-top:0">Recently changed</h2>
+    @if (CreateGroups.Count > 0) { <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Blogs="Blogs" /> }
+    <section>
+        <h2 class="section-title">Recently changed</h2>
         <ContentTable Items="Recent" Groups="GroupNames" BlogSlugs="BlogSlugs" BlogNames="BlogNames" HomePageId="HomePageId" />
-    </div>
+    </section>
+    </ChildContent>
 </AdminShell>
 @code {
     [Parameter] public int Pages { get; set; }

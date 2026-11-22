@@ -1,0 +1,17 @@
+@* Page title row: optional back link, title, badges, and actions on the right. *@
+<div class="page-head">
+    <div class="page-head-title">
+        @if (!string.IsNullOrEmpty(Back)) { <a class="back" href="@Back">← @BackText</a> }
+        <div class="page-head-row"><h1>@Title</h1>@Badges</div>
+        @if (!string.IsNullOrEmpty(Subtitle)) { <p class="muted page-head-sub">@Subtitle</p> }
+    </div>
+    @if (ChildContent is not null) { <div class="page-head-actions">@ChildContent</div> }
+</div>
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Back { get; set; }
+    [Parameter] public string BackText { get; set; } = "Back";
+    [Parameter] public RenderFragment? Badges { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

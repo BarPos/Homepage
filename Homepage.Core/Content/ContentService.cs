@@ -237,10 +237,11 @@ public sealed class ContentService(
         if (!perms.HasSystem(SystemGroups.Layout, Perm.Ro) && !perms.HasSystem(SystemGroups.Themes, Perm.Ro)) throw new NotFoundException();
         var theme = await db.Themes.AsNoTracking().FirstOrDefaultAsync(t => t.Id == target.Id, ct) ?? throw new NotFoundException();
         var header = target.Kind == EditorTarget.HeaderKind;
+        var canEdit = !theme.IsBuiltIn && perms.HasSystem(SystemGroups.Layout, Perm.Rw);
         return new EditorDocument(target, $"{theme.Name}: {(header ? "header" : "footer")}",
-            BlockTree.Parse(header ? theme.HeaderBlocks : theme.FooterBlocks),
+            BlockTree.Parse(header ? theme.DraftHeaderBlocks ?? theme.HeaderBlocks : theme.DraftFooterBlocks ?? theme.FooterBlocks),
             header ? TreeKind.Header : TreeKind.Footer,
-            !theme.IsBuiltIn && perms.HasSystem(SystemGroups.Layout, Perm.Rw), false, null, theme.Id);
+            canEdit, canEdit, null, theme.Id);
     }
 
     /// <summary>Applies one editor operation to the draft (or theme layout) and saves it. Returns the new tree.</summary>
@@ -276,18 +277,17 @@ public sealed class ContentService(
                     if (theme.IsBuiltIn) throw new AccessDeniedException("Built-in themes are read-only. Duplicate the theme to change it.");
                     var header = target.Kind == EditorTarget.HeaderKind;
                     var kind = header ? TreeKind.Header : TreeKind.Footer;
-                    var original = BlockTree.Parse(header ? theme.HeaderBlocks : theme.FooterBlocks);
+                    // The header and footer are edited as drafts too; Publish on the theme makes them live.
+                    var original = BlockTree.Parse(header ? theme.DraftHeaderBlocks ?? theme.HeaderBlocks : theme.DraftFooterBlocks ?? theme.FooterBlocks);
                     var before = MediaIds(original);
                     var ops = new BlockOps(original, kind, perms);
                     var newId = op(ops);
                     Check(ops.Tree, kind);
                     await CheckMediaAsync(db, perms, before, ops.Tree, ct);
-                    if (header) theme.HeaderBlocks = ops.Tree.ToJson(); else theme.FooterBlocks = ops.Tree.ToJson();
-                    theme.ThemeVersion++;
+                    if (header) theme.DraftHeaderBlocks = ops.Tree.ToJson(); else theme.DraftFooterBlocks = ops.Tree.ToJson();
                     theme.UpdatedAtUtc = time.GetUtcNow().UtcDateTime;
-                    await db.SaveChangesAsync(ct);
-                    await audit.WriteAsync(actor, "theme.layout", "Theme", theme.Id.ToString(), header ? "header" : "footer", ct: ct);
-                    return (ops.Tree, new ChangeResult(theme.IsActive), newId);
+                    await db.SaveChangesAsync(ct); // a draft: not live, not audited (Publish is)
+                    return (ops.Tree, new ChangeResult(false), newId);
                 }
             }
             catch (DbUpdateConcurrencyException) when (attempt == 0)

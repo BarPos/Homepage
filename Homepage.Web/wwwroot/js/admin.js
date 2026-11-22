@@ -79,4 +79,22 @@
     if (e.target.matches && e.target.matches("select[data-autosubmit]")) e.target.form.submit();
   });
   document.addEventListener("hp-flash", (e) => hpFlash(e.detail.value || e.detail.message, e.detail.kind));
+
+  // In-page dialogs: <button data-open-dialog="id" data-dialog-type="Post">; [data-close-dialog] or Esc or the backdrop close.
+  document.addEventListener("click", (e) => {
+    const opener = e.target.closest && e.target.closest("[data-open-dialog]");
+    if (opener) {
+      const dlg = document.getElementById(opener.dataset.openDialog);
+      if (!dlg) return;
+      e.preventDefault();
+      const type = opener.dataset.dialogType;
+      const select = type && dlg.querySelector('select[name="type"]');
+      if (select) { select.value = type; select.dispatchEvent(new Event("change", { bubbles: true })); }
+      dlg.showModal();
+      dlg.querySelector("[autofocus], input:not([type=hidden])")?.focus();
+      return;
+    }
+    if (e.target.closest && e.target.closest("[data-close-dialog]")) { e.target.closest("dialog")?.close(); return; }
+    if (e.target.tagName === "DIALOG" && e.target.dataset.lightDismiss !== undefined) e.target.close();
+  });
 })();

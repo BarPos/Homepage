@@ -1,0 +1,56 @@
+@{ var isNew = Blog is null; }
+<AdminShell Title="@(isNew ? "New blog" : Blog!.Name)" Section="blogs" Back="/admin/blogs" BackText="Blogs">
+    <Badges>@if (!isNew && Blog!.Id == HomeBlogId) { <span class="badge badge-ok">home</span> }</Badges>
+    <Actions>
+        @if (!isNew)
+        {
+            <a class="btn" href="/@Blog!.Slug" target="_blank" rel="noopener">View ↗</a>
+            <a class="btn" href="/admin/content?type=post&blog=@Blog.Id">Posts (@PostCount)</a>
+            @if (CanDelete)
+            {
+                <form method="post" action="/admin/blogs/@Blog.Id/delete" data-confirm="The blog has no posts. Its address becomes free for a page or another blog." data-confirm-title="Delete the blog '@Blog.Name'?" data-confirm-button="Delete blog" data-confirm-danger>
+                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                    <button class="btn-danger">Delete blog</button>
+                </form>
+            }
+        }
+    </Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <form method="post" action="/admin/blogs" class="card narrow-card" x-data="{ slug: @System.Text.Json.JsonSerializer.Serialize(Slug) }">
+        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+        @if (!isNew) { <input type="hidden" name="id" value="@Blog!.Id" /> }
+        <label for="bn">Name</label>
+        <input id="bn" name="name" type="text" value="@Name" maxlength="100" required placeholder="Releases" autofocus="@isNew" />
+        <label for="bs">Address</label>
+        <div class="input-prefix"><span>/</span><input id="bs" name="slug" type="text" x-model="slug" maxlength="80" required placeholder="releases" /></div>
+        <div class="help">The blog is at <code x-text="'/' + (slug || '…')"></code>, its posts at <code x-text="'/' + (slug || '…') + '/post-name'"></code> and its feed at <code x-text="'/' + (slug || '…') + '/feed.xml'"></code>.
+            @if (!isNew) { <span>When you change it, the old address keeps working and redirects here.</span> }</div>
+        @if (!isNew && Blog!.PreviousSlugs.Count > 0) { <div class="help">Old addresses that redirect here: @string.Join(", ", Blog.PreviousSlugs.Select(x => "/" + x))</div> }
+        <label for="bd">Description</label>
+        <textarea class="plain" id="bd" name="description" rows="2" maxlength="500" placeholder="Shown under the blog's title and in its feed">@Description</textarea>
+        <label for="bp">Posts per page</label>
+        <input id="bp" name="postsPerPage" type="number" min="1" max="50" value="@PostsPerPage" style="max-width:120px" />
+        <div class="form-actions">
+            <button class="btn-primary">@(isNew ? "Create blog" : "Save")</button>
+            <a class="btn" href="/admin/blogs">Cancel</a>
+        </div>
+    </form>
+    </ChildContent>
+</AdminShell>
+@code {
+    /// <summary>The blog being edited; null for a new one.</summary>
+    [Parameter] public Blog? Blog { get; set; }
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string Description { get; set; } = "";
+    [Parameter] public int PostsPerPage { get; set; } = 10;
+    [Parameter] public int PostCount { get; set; }
+    [Parameter] public bool CanDelete { get; set; }
+    [Parameter] public int? HomeBlogId { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

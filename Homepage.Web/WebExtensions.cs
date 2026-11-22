@@ -11,6 +11,8 @@ public static class WebExtensions
     public static IServiceCollection AddHomepageWeb(this IServiceCollection services)
     {
         services.AddRazorComponents();
+        services.AddHttpContextAccessor();
+        services.AddSingleton<Homepage.Common.IAuditRequestInfo, AuditRequestInfo>();
         services.AddScoped<RenderContextFactory>();
         services.AddSingleton<PublicContent>();
         services.AddScoped<AdminFilter>();

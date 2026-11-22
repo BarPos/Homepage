@@ -17,7 +17,9 @@ nav_order: 7
   addresses count per /64. A slot is reserved before the password is checked, so parallel guesses get no extra tries.
   Sign-in requests are also limited to 10 per minute per network.
 - **No user enumeration:** an unknown user name costs the same password hash as a real one, and every failure shows
-  the same message. The audit log records failures under the account name, or `(unknown user)`, never the typed text
+  the same message. Note that posts show their author's **display name**, which is the user name until
+  someone changes it: set a display name (Your profile) if the login name should stay private.
+  The audit log records failures under the account name, or `(unknown user)`, never the typed text
   (often a password typed into the wrong field).
 - **Cookie:** `hp_admin`, HttpOnly, SameSite=Strict, path `/admin` (public pages never receive it), `Secure` on HTTPS,
   8-hour sliding expiry and at most 12 hours after sign-in. It is encrypted with the Data Protection keys in `data/keys/`.
@@ -32,7 +34,11 @@ nav_order: 7
   two-minute cookie protected with the Data Protection keys and are read once, so a crafted link cannot make the
   admin show text of someone else's choosing.
 - **Confirmations** use an in-page dialog; destructive actions start with the focus on *Cancel*.
-- Two-factor sign-in is not available yet.
+- **Two-factor sign-in** (optional, per account): TOTP codes (RFC 6238) from an authenticator app, or single-use
+  recovery codes (stored hashed). After the password, a 5-minute cookie protected with the Data Protection keys
+  remembers who is signing in; the session cookie is issued only after the code. Codes count against the same
+  sign-in limits. Turning it on or off, and new recovery codes, change the security stamp: other sessions end.
+  `--reset-local-password` turns it off.
 
 ## Authorization
 
@@ -124,7 +130,7 @@ Releases are not signed yet. `update.sh` checks the package against the `SHA256S
 stops a compromised server process, but not a compromised GitHub repository or account. Signing `SHA256SUMS.txt`
 (minisign or cosign) with a pinned key is planned.
 
-- No two-factor sign-in.
 - Self-update verification needs a public release repository (root downloads `SHA256SUMS.txt` without a token).
-- The audit log records who did what, but not the old and new content of a page; published revisions cover that for
-  content.
+- The audit log records who did what and from which address (the request's IP, and the IP the session was signed in
+  from when it differs), but not the old and new content of a page; published revisions cover that for content.
+  Behind a proxy the addresses are only right with `Site:ForwardedHeaders` enabled.

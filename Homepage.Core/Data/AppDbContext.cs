@@ -136,6 +136,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.Property(t => t.Tokens).HasColumnType("jsonb");
             e.Property(t => t.HeaderBlocks).HasColumnType("jsonb");
             e.Property(t => t.FooterBlocks).HasColumnType("jsonb");
+            e.Property(t => t.DraftTokens).HasColumnType("jsonb");
+            e.Property(t => t.DraftHeaderBlocks).HasColumnType("jsonb");
+            e.Property(t => t.DraftFooterBlocks).HasColumnType("jsonb");
+            e.Ignore(t => t.HasDraft);
             e.HasIndex(t => t.Slug).IsUnique();
             e.Property(t => t.Version).IsRowVersion();
         });
@@ -153,6 +157,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.Property(a => a.Action).HasMaxLength(100);
             e.Property(a => a.Entity).HasMaxLength(100);
             e.Property(a => a.EntityId).HasMaxLength(100);
+            e.Property(a => a.Ip).HasMaxLength(64);
+            e.Property(a => a.SignInIp).HasMaxLength(64);
         });
         b.Entity<UpdateRun>(e =>
         {

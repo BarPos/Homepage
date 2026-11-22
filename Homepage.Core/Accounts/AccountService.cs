@@ -22,9 +22,19 @@ public sealed class AccountService(
 {
     public const int MinPasswordLength = 10;
 
-    public async Task<(OperationResult Result, User? User)> CreateAsync(string userName, string displayName, string password,
-        string actor, bool makeAdmin = false)
+    /// <summary>Checks an email address; empty is allowed (no email). Returns the trimmed address, or null when it is not valid.</summary>
+    public static string? CleanEmail(string? email, out bool valid)
     {
+        email = (email ?? "").Trim();
+        valid = email.Length == 0 || (email.Length <= 254 && System.Net.Mail.MailAddress.TryCreate(email, out var parsed) && parsed.Address == email);
+        return email.Length == 0 ? null : email;
+    }
+
+    public async Task<(OperationResult Result, User? User)> CreateAsync(string userName, string displayName, string password,
+        string actor, bool makeAdmin = false, string? email = null)
+    {
+        email = CleanEmail(email, out var emailOk);
+        if (!emailOk) return (OperationResult.Fail("That email address does not look right."), null);
         userName = userName.Trim();
         if (userName.Length is < 2 or > 64 || !userName.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-' or '@'))
             return (OperationResult.Fail("User names are 2 to 64 characters: letters, digits, . _ - @"), null);
@@ -33,7 +43,7 @@ public sealed class AccountService(
         var user = new User
         {
             UserName = userName, DisplayName = string.IsNullOrWhiteSpace(displayName) ? userName : displayName.Trim(),
-            CreatedAtUtc = time.GetUtcNow().UtcDateTime,
+            CreatedAtUtc = time.GetUtcNow().UtcDateTime, Email = email,
         };
         var created = await users.CreateAsync(user, password);
         if (!created.Succeeded) return (OperationResult.Fail(string.Join(" ", created.Errors.Select(e => e.Description))), null);
@@ -60,6 +70,19 @@ public sealed class AccountService(
         await users.SetLockoutEndDateAsync(user, null);
         await users.ResetAccessFailedCountAsync(user);
         await audit.WriteAsync(actor, "user.password", "User", user.Id.ToString(), user.UserName ?? "");
+        return OperationResult.Success;
+    }
+
+    /// <summary>Turns off two-factor sign-in and forgets the authenticator key and recovery codes (ends the user's sessions).</summary>
+    public async Task<OperationResult> DisableTwoFactorAsync(int userId, string actor)
+    {
+        var user = await users.FindByIdAsync(userId.ToString());
+        if (user is null) return OperationResult.Fail("No such user.");
+        if (!user.TwoFactorEnabled) return OperationResult.Success;
+        await users.SetTwoFactorEnabledAsync(user, false);
+        await users.ResetAuthenticatorKeyAsync(user);
+        await users.GenerateNewTwoFactorRecoveryCodesAsync(user, 0); // replaces the old codes with none
+        await audit.WriteAsync(actor, "user.2fa.off", "User", user.Id.ToString(), user.UserName ?? "");
         return OperationResult.Success;
     }
 

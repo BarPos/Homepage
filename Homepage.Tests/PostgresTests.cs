@@ -340,6 +340,78 @@ public sealed class PostgresTests(PostgresFixture pg)
         await media.DeleteAsync(admin, used.Id, "a"); // delete permission still can
     }
 
+    [Fact]
+    public async Task AuditEntriesRecordRequestAndSignInAddresses()
+    {
+        var cs = await MigratedDatabaseAsync();
+        var factory = new TestDbFactory(cs);
+        var log = new AuditLog(factory, Time, new FakeRequest("198.51.100.20", "203.0.113.7"));
+        await log.WriteAsync("admin", "content.publish", "Page", "1", "Home");
+        await log.WriteAsync("admin", "signin", "User", "1", "", "192.0.2.1"); // an explicit address wins
+        await new AuditLog(factory, Time, new NoAuditRequestInfo()).WriteAsync("scheduler", "update.check", "", "", "");
+        await using var db = PostgresFixture.Context(cs);
+        var rows = await db.AuditLog.OrderBy(a => a.Id).ToListAsync();
+        Assert.Equal(("198.51.100.20", "203.0.113.7"), (rows[0].Ip, rows[0].SignInIp));
+        Assert.Equal("192.0.2.1", rows[1].Ip);
+        Assert.Equal((null, null), (rows[2].Ip, rows[2].SignInIp)); // background jobs have no request
+    }
+
+    [Fact]
+    public async Task ThemeDraftsChangeNothingLiveAndAuditOnlyThePublish()
+    {
+        var cs = await MigratedDatabaseAsync();
+        var factory = new TestDbFactory(cs);
+        Dictionary<string, int> names;
+        await using (var db = PostgresFixture.Context(cs)) names = await db.Groups.ToDictionaryAsync(g => g.Name, g => g.Id);
+        var designer = new EffectivePermissions(0, [new Grant(names[SystemGroups.Themes], Perm.Rw)], names);
+        var themes = new Homepage.Themes.ThemeService(factory, new MemoryCache(new MemoryCacheOptions()),
+            new AuditLog(factory, Time, new NoAuditRequestInfo()), Time);
+        int builtInId;
+        await using (var db = PostgresFixture.Context(cs)) builtInId = await db.Themes.Where(t => t.IsBuiltIn).Select(t => t.Id).FirstAsync();
+        var theme = await themes.DuplicateAsync(designer, builtInId, "designer");
+        string liveTokens;
+        await using (var db = PostgresFixture.Context(cs)) { await db.AuditLog.ExecuteDeleteAsync(); liveTokens = (await db.Themes.FindAsync(theme.Id))!.Tokens; }
+
+        // many saves (the editor saves as you type): nothing live changes, nothing is audited
+        for (var i = 0; i < 5; i++)
+        {
+            var tokens = Homepage.Themes.ThemeTokens.Parse(liveTokens);
+            tokens.Radius = 3 + i;
+            await themes.SaveDraftAsync(designer, theme.Id, theme.Name, tokens, $"/* {i} */");
+        }
+        await using (var db = PostgresFixture.Context(cs))
+        {
+            var t = await db.Themes.AsNoTracking().FirstAsync(x => x.Id == theme.Id);
+            Assert.Equal(liveTokens, t.Tokens);
+            Assert.NotNull(t.DraftTokens);
+            Assert.Equal("/* 4 */", t.DraftCustomCss);
+            Assert.Equal(0, await db.AuditLog.CountAsync());
+        }
+
+        // a designer without layout: rw cannot publish header changes
+        await using (var db = PostgresFixture.Context(cs))
+        {
+            await db.Themes.Where(x => x.Id == theme.Id).ExecuteUpdateAsync(u => u.SetProperty(x => x.DraftHeaderBlocks, x => x.HeaderBlocks));
+        }
+        await Assert.ThrowsAsync<AccessDeniedException>(() => themes.PublishAsync(designer, theme.Id, "designer"));
+        await using (var db = PostgresFixture.Context(cs))
+            await db.Themes.Where(x => x.Id == theme.Id).ExecuteUpdateAsync(u => u.SetProperty(x => x.DraftHeaderBlocks, (string?)null));
+
+        await themes.PublishAsync(designer, theme.Id, "designer");
+        await using (var db = PostgresFixture.Context(cs))
+        {
+            var t = await db.Themes.AsNoTracking().FirstAsync(x => x.Id == theme.Id);
+            Assert.Equal(7d, Homepage.Themes.ThemeTokens.Parse(t.Tokens).Radius);
+            Assert.Equal("/* 4 */", t.CustomCss);
+            Assert.False(t.HasDraft);
+            var audit = await db.AuditLog.ToListAsync();
+            Assert.Equal("theme.publish", Assert.Single(audit).Action);
+        }
+        await Assert.ThrowsAsync<BlockException>(() => themes.PublishAsync(designer, theme.Id, "designer")); // nothing left to publish
+    }
+
+    private sealed record FakeRequest(string? Ip, string? SignInIp) : IAuditRequestInfo;
+
     private sealed class NullAudit : IAuditLog
     {
         public Task WriteAsync(string actor, string action, string entity, string entityId, string details, string? ip = null, CancellationToken ct = default) =>

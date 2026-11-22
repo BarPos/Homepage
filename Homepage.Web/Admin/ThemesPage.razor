@@ -1,16 +1,16 @@
-<AdminShell Title="Themes" Section="themes">
-    <p class="muted">Built-in themes are read-only: duplicate one to customize its colors, fonts, header and footer. Changes apply to every page.</p>
+<AdminShell Title="Themes" Section="themes" Subtitle="Built-in themes are read-only: duplicate one to change its colors, fonts, header and footer.">
     <div class="grid2">
         @foreach (var t in Themes)
         {
             var tokens = ThemeTokens.Parse(t.Tokens);
-            <div class="card">
-                <div class="toolbar" style="margin-bottom:6px">
-                    <strong style="font-size:16px">@t.Name</strong>
+            <div class="card theme-card @(t.IsActive ? "is-active" : null)">
+                <div class="badges theme-card-head">
+                    <strong class="theme-name">@t.Name</strong>
                     @if (t.IsActive) { <span class="badge badge-ok">Active</span> }
                     @if (t.IsBuiltIn) { <span class="badge">Built-in</span> }
+                    @if (t.HasDraft) { <span class="badge badge-warn">Unpublished changes</span> }
                 </div>
-                <div style="margin:8px 0">
+                <div class="theme-swatches">
                     @foreach (var c in new[] { "bg", "surface-alt", "text", "primary", "accent" })
                     {
                         <span class="swatch" style="background:@tokens.Light[c]" title="@c"></span>
@@ -20,7 +20,7 @@
                 <div class="form-actions">
                     @if (CanEditThemes && !t.IsActive)
                     {
-                        <form method="post" action="/admin/themes/@t.Id/activate" style="margin:0"><input type="hidden" name="__RequestVerificationToken" value="@Token" /><button class="btn-primary btn-sm">Activate</button></form>
+                        <form method="post" action="/admin/themes/@t.Id/activate"><input type="hidden" name="__RequestVerificationToken" value="@Token" /><button class="btn-primary btn-sm">Activate</button></form>
                     }
                     @if (CanEditThemes && !t.IsBuiltIn) { <a class="btn btn-sm" href="/admin/themes/@t.Id">Edit design</a> }
                     @if (CanEditLayout && !t.IsBuiltIn)
@@ -30,7 +30,7 @@
                     }
                     @if (CanEditThemes)
                     {
-                        <form method="post" action="/admin/themes/@t.Id/duplicate" style="margin:0"><input type="hidden" name="__RequestVerificationToken" value="@Token" /><button class="btn-sm">Duplicate</button></form>
+                        <form method="post" action="/admin/themes/@t.Id/duplicate"><input type="hidden" name="__RequestVerificationToken" value="@Token" /><button class="btn-sm">Duplicate</button></form>
                     }
                     <a class="btn btn-sm" href="/admin/themes/@t.Id/preview" target="_blank">Preview ↗</a>
                 </div>

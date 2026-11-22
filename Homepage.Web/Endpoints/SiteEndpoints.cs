@@ -67,7 +67,8 @@ public static class SiteEndpoints
             var post = await content.GetPublishedPostAsync(blog.Id, slug, ct);
             return post is null
                 ? Html.Render<MessagePage>(new { Ctx = ctx }, 404)
-                : Html.Render<PostView>(new { Ctx = ctx, Item = post, Tree = BlockTree.Parse(post.Blocks), Blog = blog });
+                : Html.Render<PostView>(new { Ctx = ctx, Item = post, Tree = BlockTree.Parse(post.Blocks), Blog = blog,
+                    Author = (await content.AuthorNamesAsync([post.AuthorId], ct)).GetValueOrDefault(post.AuthorId ?? 0) });
         });
 
         site.MapGet("/search", async (string? q, HttpRequest req, RenderContextFactory ctxf, PublicContent content, CancellationToken ct) =>
@@ -155,6 +156,8 @@ public static class SiteEndpoints
         });
     }
 
+    private const string DcNs = "http://purl.org/dc/elements/1.1/";
+
     private static IResult Feed(RenderContext ctx, HttpRequest req, string title, string description, string path, List<PostSummary> posts)
     {
         var baseUrl = BaseUrl(ctx.Site.BaseUrl, req);
@@ -163,6 +166,7 @@ public static class SiteEndpoints
         {
             w.WriteStartElement("rss");
             w.WriteAttributeString("version", "2.0");
+            w.WriteAttributeString("xmlns", "dc", null, DcNs);
             w.WriteStartElement("channel");
             w.WriteElementString("title", title);
             w.WriteElementString("link", baseUrl + path);
@@ -175,6 +179,7 @@ public static class SiteEndpoints
                 w.WriteElementString("guid", baseUrl + p.Url);
                 if (p.PublishedAtUtc is { } d) w.WriteElementString("pubDate", d.ToString("r", CultureInfo.InvariantCulture));
                 w.WriteElementString("description", p.Excerpt);
+                if (!string.IsNullOrEmpty(p.Author)) w.WriteElementString("creator", DcNs, p.Author);
                 w.WriteEndElement();
             }
             w.WriteEndElement();

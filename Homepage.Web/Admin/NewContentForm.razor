@@ -1,34 +1,50 @@
-<form method="post" action="/admin/content/new" class="form-row new-content" x-data="{ type: '@((Type ?? ContentType.Page).ToString())' }"
-      style="grid-template-columns:2fr 1fr 1fr 1fr auto;align-items:end">
-    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
-    <div><label for="nt">Title</label><input id="nt" name="title" type="text" required maxlength="300" placeholder="New page or post title" /></div>
-    <div>
-        <label for="ny">Type</label>
-        <select id="ny" name="type" x-model="type">
-            <option value="Page" selected="@(Type != ContentType.Post)">Page</option>
-            <option value="Post" selected="@(Type == ContentType.Post)">Blog post</option>
-        </select>
-    </div>
-    <div x-show="type === 'Post'" x-cloak>
-        <label for="nb">Blog</label>
-        <select id="nb" name="blogId">
-            @foreach (var b in Blogs) { <option value="@b.Id">@b.Name (/@b.Slug)</option> }
-        </select>
-    </div>
-    <div x-show="type !== 'Post'"></div>
-    <div>
-        <label for="ng">Group</label>
-        <select id="ng" name="groupId">
-            @foreach (var g in Groups) { <option value="@g.Id" selected="@(g.Id == DefaultGroupId)">@g.Name</option> }
-        </select>
-    </div>
-    <div><button class="btn-primary" type="submit">Create and edit</button></div>
-</form>
+@* The "new page / new post" dialog. Open it with <button data-open-dialog="new-content" data-dialog-type="Post">. *@
+<dialog id="new-content" class="modal form-modal" aria-labelledby="new-content-title" data-light-dismiss>
+    <form method="post" action="/admin/content/new" x-data="{ type: '@((Type ?? ContentType.Page).ToString())' }">
+        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+        <h2 id="new-content-title" x-text="type === 'Post' ? 'New blog post' : 'New page'">New page</h2>
+        <label for="nt">Title</label>
+        <input id="nt" name="title" type="text" required maxlength="300" autofocus placeholder="What is it called?" />
+        <div class="form-row">
+            <div>
+                <label for="ny">Type</label>
+                <select id="ny" name="type" x-model="type">
+                    <option value="Page" selected="@(Type != ContentType.Post)">Page</option>
+                    <option value="Post" selected="@(Type == ContentType.Post)">Blog post</option>
+                </select>
+            </div>
+            <div x-show="type === 'Post'" x-cloak>
+                <label for="nb">Blog</label>
+                <select id="nb" name="blogId">
+                    @foreach (var b in Blogs) { <option value="@b.Id" selected="@(b.Id == BlogId)">@b.Name (/@b.Slug)</option> }
+                </select>
+            </div>
+        </div>
+        @if (Groups.Count > 1)
+        {
+            <label for="ng">Group</label>
+            <select id="ng" name="groupId">
+                @foreach (var g in Groups) { <option value="@g.Id" selected="@(g.Id == DefaultGroupId)">@g.Name</option> }
+            </select>
+            <div class="help">Decides who can see and change it.</div>
+        }
+        else if (Groups.Count == 1)
+        {
+            <input type="hidden" name="groupId" value="@Groups[0].Id" />
+        }
+        <div class="modal-actions">
+            <button type="button" data-close-dialog>Cancel</button>
+            <button class="btn-primary" type="submit">Create and edit</button>
+        </div>
+    </form>
+</dialog>
 @code {
     [Parameter] public List<Group> Groups { get; set; } = [];
     [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
     [Parameter] public int? DefaultGroupId { get; set; }
     [Parameter] public ContentType? Type { get; set; }
+    /// <summary>Preselected blog (the list's blog filter).</summary>
+    [Parameter] public int? BlogId { get; set; }
     [CascadingParameter] public HttpContext? HttpContext { get; set; }
     private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
 }

@@ -67,7 +67,8 @@ nav_order: 10
 - *This account has no access to the admin area* after signing in: the account was made invalid, or its last role was
   removed.
 - *429 Too Many Requests*: more than 10 sign-in attempts per minute from your network. Wait a minute.
-- Every admin is locked out: `sudo bash install.sh --reset-password`.
+- Every admin is locked out, or lost both the authenticator and the recovery codes: `sudo bash install.sh --reset-password`
+  (it also turns off two-factor sign-in for that account).
 
 ## A page, button or menu is missing in the admin
 

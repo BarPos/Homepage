@@ -10,7 +10,7 @@
                 <input id="s" name="slug" type="text" value="@Item.Slug" required maxlength="200" disabled="@(!CanEdit)" />
                 <div class="help">@PublicUrl</div>
                 <label for="e">Excerpt / description</label>
-                <textarea id="e" name="excerpt" maxlength="1000" disabled="@(!CanEdit)" style="font-family:inherit">@Item.Excerpt</textarea>
+                <textarea id="e" name="excerpt" maxlength="1000" disabled="@(!CanEdit)" class="plain">@Item.Excerpt</textarea>
                 <div class="help">Used for search engines, social previews and post lists. Generated from the text when empty.</div>
                 @if (Item.Type == ContentType.Post)
                 {
@@ -28,7 +28,7 @@
             </form>
         </div>
         <div class="card">
-            <h2 style="margin-top:0">Publishing</h2>
+            <h2 class="card-title">Publishing</h2>
             <p>Status: @StatusText <span class="muted">@FirstPublished</span></p>
             <div class="form-actions">
                 <a class="btn" href="/admin/editor/content-@Item.Id">Open in editor</a>
@@ -38,13 +38,13 @@
                 }
                 @if (CanPublish)
                 {
-                    <form method="post" action="/admin/content/@Item.Id/publish" style="margin:0">
+                    <form method="post" action="/admin/content/@Item.Id/publish">
                         <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                         <button class="btn-primary">Publish draft</button>
                     </form>
                     @if (Item.Status == ContentStatus.Published)
                     {
-                        <form method="post" action="/admin/content/@Item.Id/unpublish" style="margin:0">
+                        <form method="post" action="/admin/content/@Item.Id/unpublish">
                             <input type="hidden" name="__RequestVerificationToken" value="@Token" />
                             <button>Unpublish</button>
                         </form>
