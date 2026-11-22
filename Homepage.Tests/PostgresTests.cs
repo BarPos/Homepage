@@ -237,6 +237,109 @@ public sealed class PostgresTests(PostgresFixture pg)
         await Assert.ThrowsAsync<ConflictException>(() => blogs.DeleteAsync(admin, releases.Id, "a"));
     }
 
+    [Fact]
+    public async Task ContentAndMediaNeverGoIntoSystemGroups()
+    {
+        var cs = await MigratedDatabaseAsync();
+        var factory = new TestDbFactory(cs);
+        Dictionary<string, int> names;
+        await using (var db = PostgresFixture.Context(cs)) names = await db.Groups.ToDictionaryAsync(g => g.Name, g => g.Id);
+        var designer = new EffectivePermissions(0, [new Grant(names[SystemGroups.Themes], Perm.Rw)], names);
+        var svc = new ContentService(factory, new ContentExtractor(new MarkdownRenderer()), new NullAudit(), Time);
+        await Assert.ThrowsAsync<NotFoundException>(() => svc.CreateAsync(designer, ContentType.Page, "Sneaky", names[SystemGroups.Themes], "d"));
+        var paths = Microsoft.Extensions.Options.Options.Create(new Homepage.Options.PathsOptions { Data = Directory.CreateTempSubdirectory().FullName });
+        var media = new Homepage.Media.MediaService(factory, paths, new NullAudit(), Time);
+        await Assert.ThrowsAsync<AccessDeniedException>(() => media.UploadAsync(designer, names[SystemGroups.Themes], "x.png",
+            new MemoryStream([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3]), "d"));
+        // and an editor cannot move content into a system group
+        var editor = new EffectivePermissions(0, [new Grant(names[SystemGroups.Content], Perm.Rw), new Grant(names[SystemGroups.Layout], Perm.Rw)], names);
+        var page = await svc.CreateAsync(editor, ContentType.Page, "Normal", names[SystemGroups.Content], "e");
+        await Assert.ThrowsAsync<NotFoundException>(() => svc.UpdateSettingsAsync(editor, page.Id, "Normal", page.Slug, "", names[SystemGroups.Layout], "e"));
+    }
+
+    [Fact]
+    public async Task ImageBlocksOnlyUseMediaTheUserCanSee()
+    {
+        var cs = await MigratedDatabaseAsync();
+        var factory = new TestDbFactory(cs);
+        Dictionary<string, int> names;
+        int secretMedia, ownMedia;
+        await using (var db = PostgresFixture.Context(cs))
+        {
+            db.Groups.Add(new Group { Name = "hr", CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+            names = await db.Groups.ToDictionaryAsync(g => g.Name, g => g.Id);
+            var a = new MediaItem { GroupId = names["hr"], FileName = "salaries.pdf", StoredName = Guid.NewGuid().ToString("N") + ".pdf", ContentType = "application/pdf", CreatedAtUtc = DateTime.UtcNow };
+            var b = new MediaItem { GroupId = names[SystemGroups.Content], FileName = "ok.png", StoredName = Guid.NewGuid().ToString("N") + ".png", ContentType = "image/png", CreatedAtUtc = DateTime.UtcNow };
+            db.Media.AddRange(a, b);
+            await db.SaveChangesAsync();
+            (secretMedia, ownMedia) = (a.Id, b.Id);
+        }
+        var author = new EffectivePermissions(0, [new Grant(names[SystemGroups.Content], Perm.Rw)], names);
+        var svc = new ContentService(factory, new ContentExtractor(new MarkdownRenderer()), new NullAudit(), Time);
+        var page = await svc.CreateAsync(author, ContentType.Page, "Gallery", names[SystemGroups.Content], "a");
+        var target = new EditorTarget(EditorTarget.ContentKind, page.Id);
+        var (_, _, imageId) = await svc.ApplyAsync(author, target, o => o.Insert("image", null, 1), "a");
+        await Assert.ThrowsAsync<AccessDeniedException>(() => svc.ApplyAsync(author, target,
+            o => { o.Update(imageId!, new System.Text.Json.Nodes.JsonObject { ["mediaId"] = secretMedia, ["alt"] = "", ["caption"] = "", ["width"] = 0 }); return null; }, "a"));
+        await Assert.ThrowsAsync<AccessDeniedException>(() => svc.ApplyAsync(author, target,
+            o => { o.Update(imageId!, new System.Text.Json.Nodes.JsonObject { ["mediaId"] = 999999, ["alt"] = "", ["caption"] = "", ["width"] = 0 }); return null; }, "a"));
+        await svc.ApplyAsync(author, target,
+            o => { o.Update(imageId!, new System.Text.Json.Nodes.JsonObject { ["mediaId"] = ownMedia, ["alt"] = "", ["caption"] = "", ["width"] = 0 }); return null; }, "a");
+    }
+
+    [Fact]
+    public async Task EditWithoutPublishCannotRenameLiveItems()
+    {
+        var cs = await MigratedDatabaseAsync();
+        var factory = new TestDbFactory(cs);
+        Dictionary<string, int> names;
+        await using (var db = PostgresFixture.Context(cs)) names = await db.Groups.ToDictionaryAsync(g => g.Name, g => g.Id);
+        var c = names[SystemGroups.Content];
+        var admin = new EffectivePermissions(0, [new Grant(names[SystemGroups.Admin], Perm.Rw)], names);
+        var editor = new EffectivePermissions(0, [new Grant(c, Perm.Ro), new Grant(c, Perm.Edit)], names);
+        var svc = new ContentService(factory, new ContentExtractor(new MarkdownRenderer()), new NullAudit(), Time);
+        var page = await svc.CreateAsync(admin, ContentType.Page, "About", c, "a");
+        await svc.UpdateSettingsAsync(editor, page.Id, "About us", page.Slug, "", c, "e"); // still a draft: fine
+        await svc.PublishAsync(admin, page.Id, "a");
+        await Assert.ThrowsAsync<AccessDeniedException>(() => svc.UpdateSettingsAsync(editor, page.Id, "Hacked", page.Slug, "", c, "e"));
+        await Assert.ThrowsAsync<AccessDeniedException>(() => svc.UpdateSettingsAsync(editor, page.Id, "About us", "moved", "", c, "e"));
+    }
+
+    [Fact]
+    public async Task UploadersCannotDeleteFilesUsedOnPublishedPages()
+    {
+        var cs = await MigratedDatabaseAsync();
+        var factory = new TestDbFactory(cs);
+        Dictionary<string, int> names;
+        int writerId;
+        await using (var db = PostgresFixture.Context(cs))
+        {
+            names = await db.Groups.ToDictionaryAsync(g => g.Name, g => g.Id);
+            var u = new User { UserName = "w", NormalizedUserName = "W", CreatedAtUtc = DateTime.UtcNow };
+            db.Users.Add(u);
+            await db.SaveChangesAsync();
+            writerId = u.Id;
+        }
+        var c = names[SystemGroups.Content];
+        var writer = new EffectivePermissions(writerId, [new Grant(c, Perm.Create), new Grant(c, Perm.Ro)], names);
+        var admin = new EffectivePermissions(0, [new Grant(names[SystemGroups.Admin], Perm.Rw)], names);
+        var paths = Microsoft.Extensions.Options.Options.Create(new Homepage.Options.PathsOptions { Data = Directory.CreateTempSubdirectory().FullName });
+        var media = new Homepage.Media.MediaService(factory, paths, new NullAudit(), Time);
+        var png = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3 };
+        var unused = await media.UploadAsync(writer, c, "a.png", new MemoryStream(png), "w");
+        await media.DeleteAsync(writer, unused.Id, "w"); // own and unused: fine
+        var used = await media.UploadAsync(writer, c, "b.png", new MemoryStream(png), "w");
+        var svc = new ContentService(factory, new ContentExtractor(new MarkdownRenderer()), new NullAudit(), Time);
+        var page = await svc.CreateAsync(admin, ContentType.Page, "Pics", c, "a");
+        var target = new EditorTarget(EditorTarget.ContentKind, page.Id);
+        var (_, _, img) = await svc.ApplyAsync(admin, target, o => o.Insert("image", null, 1), "a");
+        await svc.ApplyAsync(admin, target, o => { o.Update(img!, new System.Text.Json.Nodes.JsonObject { ["mediaId"] = used.Id, ["alt"] = "", ["caption"] = "", ["width"] = 0 }); return null; }, "a");
+        await svc.PublishAsync(admin, page.Id, "a");
+        await Assert.ThrowsAsync<AccessDeniedException>(() => media.DeleteAsync(writer, used.Id, "w"));
+        await media.DeleteAsync(admin, used.Id, "a"); // delete permission still can
+    }
+
     private sealed class NullAudit : IAuditLog
     {
         public Task WriteAsync(string actor, string action, string entity, string entityId, string details, string? ip = null, CancellationToken ct = default) =>

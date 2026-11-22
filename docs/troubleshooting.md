@@ -57,13 +57,16 @@ nav_order: 10
 
 ## Cannot sign in
 
-- *Wrong user name or password, or the account is locked*: after 5 wrong passwords the account is locked for 10
-  minutes. The audit log shows `signin.failed` entries with the address.
+- *Wrong user name or password, or too many attempts*: either the password is wrong, or 5 wrong attempts were made
+  for this account from your network in the last 15 minutes (other networks are not affected). The audit log shows
+  `signin.failed` and `signin.limited` entries with the address.
+- Sent back to the sign-in page right after signing in elsewhere: your password was reset or the account made invalid
+  in the meantime, which ends every session.
 - *This account has no permissions yet*: the account exists but has no role or grant. Give it one under **Users ↔
   Roles**.
 - *This account has no access to the admin area* after signing in: the account was made invalid, or its last role was
   removed.
-- *429 Too Many Requests*: more than 10 sign-in attempts per minute from your address. Wait a minute.
+- *429 Too Many Requests*: more than 10 sign-in attempts per minute from your network. Wait a minute.
 - Every admin is locked out: `sudo bash install.sh --reset-password`.
 
 ## A page, button or menu is missing in the admin
@@ -118,3 +121,8 @@ Common cases:
    error in the log) and try again.
 4. *Self-update needs Ubuntu 24.04 LTS or newer* / *not installed with install.sh*: update with
    `install.sh --upgrade --package FILE` instead.
+5. *update.env has no valid GITHUB_REPOSITORY*: run `sudo bash install.sh --repair --version <running version>` once.
+6. *cannot download SHA256SUMS.txt of release v… from github.com/…*: the server cannot reach GitHub as root (proxy or
+   firewall), or the repository is private. Upgrade offline with `install.sh --upgrade --package FILE`.
+7. *… is not the package published in release v…*: the staged package does not match the release on GitHub. Nothing
+   was installed. If you did not expect this, treat the server as compromised (see [Security](security.md)).

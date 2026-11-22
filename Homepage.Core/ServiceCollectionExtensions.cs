@@ -38,8 +38,9 @@ public static class ServiceCollectionExtensions
                 o.Password.RequireLowercase = false;
                 o.Password.RequireUppercase = false;
                 o.Password.RequireNonAlphanumeric = false;
-                o.Lockout.MaxFailedAccessAttempts = 5;
-                o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
+                // No account lockout: it lets anyone lock an admin out. Failed sign-ins are limited per network instead
+                // (SignInLimiter in Homepage.Web).
+                o.Lockout.AllowedForNewUsers = false;
                 o.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@";
             })
             .AddEntityFrameworkStores<AppDbContext>()

@@ -22,7 +22,10 @@ public static class SiteEndpoints
     private const int PageSize = 10;
 
     public static void AddPublicCachePolicy(OutputCacheOptions o) =>
-        o.AddPolicy(CachePolicy, b => b.Tag(CacheTag).SetVaryByHeader("HX-Request", "HX-Boosted").SetVaryByQuery("skip", "q")
+        // Vary by whether this is a fragment request (the same test as Html.IsFragmentRequest), not by raw header text,
+        // so odd header values cannot create extra cache entries or a fragment cached as a full page.
+        o.AddPolicy(CachePolicy, b => b.Tag(CacheTag).VaryByValue(ctx => new KeyValuePair<string, string>("fragment", Html.IsFragmentRequest(ctx.Request) ? "1" : "0"))
+            .SetVaryByQuery("skip", "q")
             .Expire(TimeSpan.FromMinutes(30)));
 
     public static void MapSite(this WebApplication app)

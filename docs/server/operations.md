@@ -92,6 +92,9 @@ sudo /opt/homepage/bin/backup.sh restore /mnt/nas/homepage-backup-1.0.2-web-2026
   sign-in cookie). They are written with mode 600, owned by root. Keep copies off the server, for example in a
   nightly cron job: `0 3 * * * root /opt/homepage/bin/backup.sh create --output /mnt/nas/homepage/` (the mount
   point must be owned by root and not writable by others).
+- **What is left out:** only folders and regular files with a single link and no setuid/setgid bit are archived
+  (what a restore accepts). Anything else under `data/` (links, FIFOs, sockets, devices, hard links) is left out and
+  listed as a warning; Homepage itself never creates such files there.
 - **Before updates:** `update.sh` also writes a database dump to `/opt/homepage/backups/pre-update/` before every
   update.
 

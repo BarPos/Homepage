@@ -176,23 +176,40 @@ public sealed partial class ThemeTokens
 
     private static string Num(double d) => d.ToString("0.###", CultureInfo.InvariantCulture);
 
-    [GeneratedRegex(@"@import[^;]*;?", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"@import\b[^;]*;?", RegexOptions.IgnoreCase)]
     private static partial Regex ImportRule();
 
-    [GeneratedRegex(@"url\(\s*['""]?\s*(?!/(?!/)|data:image/)[^)]*\)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"/\*.*?(\*/|$)", RegexOptions.Singleline)]
+    private static partial Regex Comment();
+
+    [GeneratedRegex(@"(-webkit-)?image-set\s*\(", RegexOptions.IgnoreCase)]
+    private static partial Regex ImageSet();
+
+    // url( … ) whose argument is not a site path ("/x", not "//x") or a data: image.
+    [GeneratedRegex(@"url\(\s*(?!['""]?\s*(?:/[^/]|data:image/))[^)]*\)", RegexOptions.IgnoreCase)]
     private static partial Regex ExternalUrl();
 
     /// <summary>
-    /// Custom CSS (themes: rw only) may not load anything from other sites: @import is removed and url() is
-    /// allowed only for site-relative paths and data: images. "&lt;" is removed so it cannot close a style element.
+    /// Custom CSS (themes: rw only) may not load anything from other sites. CSS escapes (\75rl, \/) and comments are
+    /// removed first, so they cannot hide a keyword or a path; then @import goes, image-set() is made invalid, and url()
+    /// keeps only site paths and data: images. The steps repeat until nothing changes, so removed pieces cannot join
+    /// into a new keyword. "&lt;" is removed so the CSS cannot close a style element.
     /// </summary>
     public static string SanitizeCustomCss(string? css)
     {
         if (string.IsNullOrEmpty(css)) return "";
-        var s = css.Replace("<", "", StringComparison.Ordinal);
-        s = ImportRule().Replace(s, "");
-        s = ExternalUrl().Replace(s, "none");
-        return s.Length > 100_000 ? s[..100_000] : s;
+        var s = css.Length > 100_000 ? css[..100_000] : css;
+        for (var pass = 0; pass < 10; pass++)
+        {
+            var before = s;
+            s = s.Replace("<", "", StringComparison.Ordinal).Replace("\\", "", StringComparison.Ordinal);
+            s = Comment().Replace(s, "");
+            s = ImportRule().Replace(s, "");
+            s = ImageSet().Replace(s, "invalid(");
+            s = ExternalUrl().Replace(s, "none");
+            if (s == before) break;
+        }
+        return s;
     }
 
     /// <summary>WCAG 2 contrast ratio of two #rrggbb colors.</summary>

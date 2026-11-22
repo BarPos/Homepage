@@ -14,6 +14,7 @@ public static class WebExtensions
         services.AddScoped<RenderContextFactory>();
         services.AddSingleton<PublicContent>();
         services.AddScoped<AdminFilter>();
+        services.AddSingleton<SignInLimiter>();
         services.AddOutputCache(SiteEndpoints.AddPublicCachePolicy);
         services.AddAntiforgery(o =>
         {
@@ -33,7 +34,7 @@ public static class WebExtensions
                 o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
                 o.LoginPath = "/admin/login";
                 o.AccessDeniedPath = "/admin/login";
-                o.ExpireTimeSpan = TimeSpan.FromHours(8);
+                o.ExpireTimeSpan = TimeSpan.FromHours(8); // sliding; AdminFilter also ends sessions 12 h after sign-in
                 o.SlidingExpiration = true;
             });
         services.AddAuthorization();
@@ -41,7 +42,7 @@ public static class WebExtensions
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             o.AddPolicy("signin", ctx => RateLimitPartition.GetFixedWindowLimiter(
-                ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                SignInLimiter.Network(ctx.Connection.RemoteIpAddress), // IPv6 per /64
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
         });
         return services;

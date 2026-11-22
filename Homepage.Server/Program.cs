@@ -155,7 +155,8 @@ if (site.ForwardedHeaders.Enabled) app.UseForwardedHeaders();
 // Health endpoint for update.sh. Loopback only (behind a same-host proxy, forwarded headers are applied first,
 // so proxied requests carry the client's address; block /healthz in the proxy as well).
 app.MapGet("/healthz", (HttpContext ctx) =>
-    ctx.Connection.RemoteIpAddress is { } ip && System.Net.IPAddress.IsLoopback(ip)
+    // Exact path only: routing would also match /healthz/ and /HEALTHZ, which a proxy rule for /healthz misses.
+    ctx.Request.Path.Value == "/healthz" && ctx.Connection.RemoteIpAddress is { } ip && System.Net.IPAddress.IsLoopback(ip)
         ? Results.Text($$"""{"status":"ok","version":"{{AppVersion.Current}}"}""", "application/json")
         : Results.NotFound());
 

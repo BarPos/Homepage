@@ -19,8 +19,9 @@ nav_order: 4
   accepted, because it can contain scripts.
 - Files are stored under random names in `data/media/` and served at `/media/<name>` with a one-year cache header,
   their real content type, `X-Content-Type-Options: nosniff` and a sandboxing Content-Security-Policy.
-- You see the files of groups where you have `ro`. You can delete your own uploads with `create`, others' with
-  `delete`.
+- You see the files of groups where you have `ro`. You can delete your own uploads with `create` as long as they are
+  not used on a published page, in a theme or as the logo or favicon; others', and files in use, need `delete`.
+- Image blocks can only show files from groups where you have `ro`.
 - To use an image, select an **Image** block in the editor and pick it in the inspector.
 - The list can be searched by file name and filtered by group and kind (images, PDFs), with paging.
 

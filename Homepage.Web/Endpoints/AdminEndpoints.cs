@@ -39,24 +39,30 @@ public static class AdminEndpoints
             }));
 
         anon.MapPost("/login", async (HttpContext http, IAntiforgery af, UserManager<User> users, IPermissionService perms, IAuditLog audit,
-            [FromForm] string userName, [FromForm] string password, [FromForm] string? returnUrl) =>
+            SignInLimiter limiter, TimeProvider time, [FromForm] string userName, [FromForm] string password, [FromForm] string? returnUrl) =>
         {
             if (!await af.IsRequestValidAsync(http)) return Results.BadRequest();
-            const string fail = "Wrong user name or password, or the account is locked.";
-            var user = await users.FindByNameAsync(userName.Trim());
-            var ip = http.Connection.RemoteIpAddress?.ToString();
-            if (user is null || !user.Valid || await users.IsLockedOutAsync(user))
+            const string fail = "Wrong user name or password, or too many attempts. Wait a few minutes and try again.";
+            var ip = http.Connection.RemoteIpAddress;
+            IResult Failed(string? name = null) =>
+                Html.Render<LoginPage>(new { Token = af.GetAndStoreTokens(http).RequestToken ?? "", Error = fail, UserName = name }, 401);
+
+            var reservation = limiter.TryReserve((userName ?? "").Trim().ToUpperInvariant(), ip);
+            if (reservation is null)
             {
-                await audit.WriteAsync(userName, "signin.failed", "User", user?.Id.ToString() ?? "", "", ip);
-                return Html.Render<LoginPage>(new { Token = af.GetAndStoreTokens(http).RequestToken ?? "", Error = fail, UserName = userName }, 401);
+                await audit.WriteAsync("(sign-in)", "signin.limited", "User", "", "", ip?.ToString());
+                return Failed(userName);
             }
-            if (!await users.CheckPasswordAsync(user, password))
+            var user = await users.FindByNameAsync((userName ?? "").Trim());
+            // Always pay for one password hash, so the response time does not tell which user names exist.
+            var ok = user is not null ? await users.CheckPasswordAsync(user, password ?? "") : DummyPasswordCheck(password ?? "");
+            if (user is null || !user.Valid || !ok)
             {
-                await users.AccessFailedAsync(user);
-                await audit.WriteAsync(userName, "signin.failed", "User", user.Id.ToString(), "", ip);
-                return Html.Render<LoginPage>(new { Token = af.GetAndStoreTokens(http).RequestToken ?? "", Error = fail, UserName = userName }, 401);
+                // Never store the typed name of an unknown account: it is often a password typed into the wrong field.
+                await audit.WriteAsync(user?.UserName ?? "(unknown user)", "signin.failed", "User", user?.Id.ToString() ?? "", "", ip?.ToString());
+                return Failed(userName);
             }
-            await users.ResetAccessFailedCountAsync(user);
+            limiter.Succeeded(reservation);
             if (!(await perms.GetAsync(user.Id)).CanSeeAdmin)
                 return Html.Render<LoginPage>(new { Token = af.GetAndStoreTokens(http).RequestToken ?? "", Error = "This account has no permissions yet. Ask an administrator.", UserName = userName }, 403);
             var identity = new ClaimsIdentity(
@@ -64,10 +70,12 @@ public static class AdminEndpoints
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.UserName ?? ""),
                 new Claim("display_name", user.DisplayName),
+                new Claim(AdminAuth.StampClaim, user.SecurityStamp ?? ""),
+                new Claim(AdminAuth.IssuedClaim, time.GetUtcNow().ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
             ], AdminAuth.Scheme);
             await http.SignInAsync(AdminAuth.Scheme, new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = false });
-            await audit.WriteAsync(user.UserName ?? "", "signin", "User", user.Id.ToString(), "", ip);
-            return Results.Redirect(returnUrl is { Length: > 1 } r && r.StartsWith("/admin", StringComparison.Ordinal) && !r.StartsWith("//", StringComparison.Ordinal) ? r : "/admin");
+            await audit.WriteAsync(user.UserName ?? "", "signin", "User", user.Id.ToString(), "", ip?.ToString());
+            return Results.Redirect(returnUrl is { Length: > 1 } r && r.StartsWith("/admin", StringComparison.Ordinal) && !r.StartsWith("//", StringComparison.Ordinal) && !r.Contains('\\') ? r : "/admin");
         }).RequireRateLimiting("signin");
 
         // ---------------------------------------------------------------- signed-in area
@@ -96,7 +104,7 @@ public static class AdminEndpoints
                 Pages = pages, Posts = posts, Drafts = drafts,
                 ThemeName = (await themes.GetActiveAsync()).Name,
                 Recent = recent.Items,
-                GroupNames = groups.ToDictionary(g => g.Id, g => g.Name),
+                GroupNames = groups.Where(g => a.Perms.Has(g.Id, Perm.Ro)).ToDictionary(g => g.Id, g => g.Name),
                 CreateGroups = CreatableGroups(a.Perms, groups),
                 DefaultGroupId = site.DefaultGroupId,
                 Blogs = await blogs.AllAsync(),
@@ -457,7 +465,8 @@ public static class AdminEndpoints
             var (_, error) = FlashCookie.Take(http);
             if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Layout, Perm.Rw)) throw new AccessDeniedException("Blogs need layout: rw.");
             await using var db = await dbf.CreateDbContextAsync();
-            var counts = await db.ContentItems.Where(c => c.BlogId != null).GroupBy(c => c.BlogId!.Value)
+            var visible = AdminContext.Get(http).Perms.GroupsWith(Perm.Ro);
+            var counts = await db.ContentItems.Where(c => c.BlogId != null && visible.Contains(c.GroupId)).GroupBy(c => c.BlogId!.Value)
                 .Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
             return Html.Render<BlogsPage>(new { Blogs = await blogs.AllAsync(), PostCounts = counts, HomeBlogId = (await SiteSettings.LoadAsync(db)).HomeBlogId, Error = error });
         });
@@ -817,6 +826,14 @@ public static class AdminEndpoints
     private static string? Do(Action a) { a(); return null; }
 
     private static int? Int(string? s) => int.TryParse(s, out var v) ? v : null;
+
+    private static readonly Lazy<string> DummyHash = new(() => new PasswordHasher<User>().HashPassword(new User(), Guid.NewGuid().ToString()));
+
+    private static bool DummyPasswordCheck(string password)
+    {
+        new PasswordHasher<User>().VerifyHashedPassword(new User(), DummyHash.Value, password);
+        return false;
+    }
 
     private static string Clip(string s, int max) { s = s.Trim(); return s.Length <= max ? s : s[..max]; }
 

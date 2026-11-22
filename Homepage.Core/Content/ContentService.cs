@@ -85,7 +85,8 @@ public sealed class ContentService(
         title = title.Trim();
         if (title.Length is 0 or > 300) throw new BlockException("The title must be 1 to 300 characters.");
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        if (!await db.Groups.AnyAsync(g => g.Id == groupId && g.Valid, ct)) throw new NotFoundException("The group does not exist.");
+        // System groups gate admin areas; content never goes in them (rw there would otherwise mean publishing pages).
+        if (!await db.Groups.AnyAsync(g => g.Id == groupId && g.Valid && !g.IsSystem, ct)) throw new NotFoundException("The group does not exist.");
         int? blog = null;
         if (type == ContentType.Post)
         {
@@ -145,10 +146,13 @@ public sealed class ContentService(
         if (groupId != item.GroupId)
         {
             if (!ContentRules.CanMove(perms, facts, groupId)) throw new AccessDeniedException("You cannot move this item to that group.");
-            if (!await db.Groups.AnyAsync(g => g.Id == groupId && g.Valid, ct)) throw new NotFoundException("The group does not exist.");
+            if (!await db.Groups.AnyAsync(g => g.Id == groupId && g.Valid && !g.IsSystem, ct)) throw new NotFoundException("The group does not exist.");
         }
         var publicChange = item.Status == ContentStatus.Published
             && (item.Title != title || item.Slug != slug || item.Excerpt != excerpt.Trim() || item.BlogId != targetBlog);
+        // The title, address and blog of a published item are live at once, so changing them is publishing.
+        if (publicChange && !ContentRules.CanPublish(perms, facts))
+            throw new AccessDeniedException("Changing the title, address, excerpt or blog of a published item needs publish.");
         var moved = item.GroupId != groupId;
         item.Title = title;
         item.Slug = slug;
@@ -255,9 +259,11 @@ public sealed class ContentService(
                     if (!ContentRules.CanView(perms, f)) throw new NotFoundException();
                     if (!ContentRules.CanEdit(perms, f)) throw new AccessDeniedException("You cannot edit this item.");
                     var kind = item.Type == ContentType.Post ? TreeKind.Post : TreeKind.Page;
+                    var before = MediaIds(BlockTree.Parse(item.DraftBlocks));
                     var ops = new BlockOps(BlockTree.Parse(item.DraftBlocks), kind, perms);
                     var newId = op(ops);
                     Check(ops.Tree, kind);
+                    await CheckMediaAsync(db, perms, before, ops.Tree, ct);
                     item.DraftBlocks = ops.Tree.ToJson();
                     item.UpdatedAtUtc = time.GetUtcNow().UtcDateTime;
                     await db.SaveChangesAsync(ct);
@@ -270,9 +276,12 @@ public sealed class ContentService(
                     if (theme.IsBuiltIn) throw new AccessDeniedException("Built-in themes are read-only. Duplicate the theme to change it.");
                     var header = target.Kind == EditorTarget.HeaderKind;
                     var kind = header ? TreeKind.Header : TreeKind.Footer;
-                    var ops = new BlockOps(BlockTree.Parse(header ? theme.HeaderBlocks : theme.FooterBlocks), kind, perms);
+                    var original = BlockTree.Parse(header ? theme.HeaderBlocks : theme.FooterBlocks);
+                    var before = MediaIds(original);
+                    var ops = new BlockOps(original, kind, perms);
                     var newId = op(ops);
                     Check(ops.Tree, kind);
+                    await CheckMediaAsync(db, perms, before, ops.Tree, ct);
                     if (header) theme.HeaderBlocks = ops.Tree.ToJson(); else theme.FooterBlocks = ops.Tree.ToJson();
                     theme.ThemeVersion++;
                     theme.UpdatedAtUtc = time.GetUtcNow().UtcDateTime;
@@ -290,6 +299,33 @@ public sealed class ContentService(
                 throw new ConflictException("Someone else saved this page at the same time. Reload the editor.");
             }
         }
+    }
+
+    /// <summary>Media ids referenced by [MediaPicker] props anywhere in a tree.</summary>
+    internal static HashSet<int> MediaIds(BlockTree tree)
+    {
+        var ids = new HashSet<int>();
+        foreach (var n in tree.All())
+        {
+            if (BlockRegistry.Get(n.Type) is not { } def) continue;
+            foreach (var p in def.PropsType.GetProperties())
+            {
+                if (!Attribute.IsDefined(p, typeof(MediaPickerAttribute))) continue;
+                var name = System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(p.Name);
+                if (n.Props[name] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<int>(out var id)) ids.Add(id);
+            }
+        }
+        return ids;
+    }
+
+    /// <summary>A block may only start showing media the user can see (ro on the media's group).</summary>
+    private static async Task CheckMediaAsync(AppDbContext db, EffectivePermissions perms, HashSet<int> before, BlockTree after, CancellationToken ct)
+    {
+        var added = MediaIds(after).Except(before).ToList();
+        if (added.Count == 0) return;
+        var groups = await db.Media.AsNoTracking().Where(m => added.Contains(m.Id)).Select(m => new { m.Id, m.GroupId }).ToListAsync(ct);
+        if (groups.Count != added.Count || groups.Any(g => !perms.Has(g.GroupId, Perm.Ro)))
+            throw new AccessDeniedException("That file does not exist or you cannot use it.");
     }
 
     private static void Check(BlockTree tree, TreeKind kind)

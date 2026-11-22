@@ -17,11 +17,12 @@ you may not see is not listed, a button you may not use is not shown, and the se
 
 - Accounts are kept in the database (ASP.NET Core Identity, PBKDF2 password hashes). Passwords have at least 10
   characters.
-- After 5 wrong passwords an account is locked for 10 minutes. Sign-in attempts are also limited to 10 per minute per
-  IP address. Every failure shows the same message; the reason is in the **Audit log**.
+- Wrong passwords are limited per account and network (5 per 15 minutes from one network), not by locking the
+  account, so nobody can keep you out by guessing. Every failure shows the same message; the **Audit log** has the
+  details.
 - An account that is **invalid**, or that has no permission on any group, cannot sign in.
-- A session ends after 8 hours without activity. Permissions are checked on every request, so taking a role away
-  takes effect on the user's next click.
+- A session ends after 8 hours without activity, 12 hours after sign-in, or when the password is reset or the account
+  made invalid. Permissions are checked on every request, so taking a role away takes effect on the user's next click.
 - Lost the only admin password? On the server: `sudo bash install.sh --reset-password`.
 
 {: .note }

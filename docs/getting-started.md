@@ -53,22 +53,16 @@ At the end, the installer prints a Caddy site block for your server name. Instal
 
 ```
 www.example.com {
-    @health path /healthz
+    @health path /healthz /healthz/*
     respond @health 404
     reverse_proxy 127.0.0.1:5080
 }
 ```
 
-`sudo systemctl reload caddy`. Caddy gets a certificate from Let's Encrypt and renews it. Then tell Homepage to trust
-the proxy's `X-Forwarded-*` headers, so sign-in limits and the audit log see the visitor's address and cookies are
-marked secure. In `/opt/homepage/config/appsettings.Production.json`:
-
-```json
-"Site": { "Urls": "http://127.0.0.1:5080", "ForwardedHeaders": { "Enabled": true } }
-```
-
-`sudo systemctl restart homepage`. A proxy on the same machine is trusted without listing it; see
-[Configuration](server/configuration.md#site) for a proxy elsewhere.
+`sudo systemctl reload caddy`. Caddy gets a certificate from Let's Encrypt and renews it. In `http` mode on loopback
+the installer already trusts the proxy's `X-Forwarded-*` headers (`Site:ForwardedHeaders`), so sign-in limits and the
+audit log see the visitor's address and cookies are marked secure. For a proxy on another machine, see
+[Configuration](server/configuration.md#site).
 
 ## 3. Sign in
 

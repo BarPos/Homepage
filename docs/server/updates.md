@@ -47,7 +47,10 @@ why it is not.
 2. It writes `data/updates/request.conf`. The path unit `homepage-update.path` starts the one-shot
    `homepage-update.service`, which runs `update.sh` as root. The server itself never needs root.
 3. `update.sh` does the following:
-   - accepts only a plain `x.y.z` that is newer than the running version, and checks the hash again;
+   - accepts only a plain `x.y.z` that is newer than the running version;
+   - reads the staged files as the service user and checks the package against the `SHA256SUMS.txt` it downloads
+     **itself** from release `v<version>` of the repository in `GITHUB_REPOSITORY` (in `config/update.env`, root only).
+     The staged sums only prove the copy is intact; the published ones prove it is the real release;
    - unpacks safely: no absolute paths, no `..`, no links pointing outside, files owned by root;
    - stops the server and writes a `pg_dump` backup to `backups/pre-update/` (root only);
    - runs `--migrate-only` with the new version, as `homepage`: database migrations, then the content migrations of
@@ -75,6 +78,14 @@ sent to the sign-in page and back to **Settings**.
 While the server restarts, the site is unavailable for a few seconds. Public pages are served again as soon as it
 answers; the output cache starts empty.
 
+{: .important }
+**Upgrading from 0.2.1 or older:** the verification above lives in the new `update.sh`, which an update through the
+admin does not install (see below). After updating, refresh the root scripts once with
+`sudo bash install.sh --repair --version <new version>`. This also adds `GITHUB_REPOSITORY` to `update.env`.
+
+`install.sh --upgrade --package FILE` works offline: root approves exactly that package (a root-only file in
+`config/`), so `update.sh` does not need GitHub for it.
+
 ### Refreshing update.sh, backup.sh and the units
 
 `update.sh`, `backup.sh` and the systemd units run as root. *Update now* never replaces them: the new release's copies
@@ -91,8 +102,10 @@ sudo bash install.sh --repair --version 1.2.0
 sudo bash install.sh --repair --package Homepage.Server-1.2.0-linux-x64.tar.gz
 ```
 
-`install.sh --upgrade` refreshes them as well, from the package it installs. `install.sh --repair` without
-`--package`/`--version` keeps the installed copies (it stops if one is missing). Run `install.sh` from a download
+`install.sh --upgrade` refreshes them as well, from the package it installs. `install.sh --repair` with
+`--package`/`--version` also reinstalls the program from that package and makes it the running release (never an
+older one: restore a backup for that), which recovers a server from an unexpected release. Without
+`--package`/`--version` it keeps the installed copies (it stops if one is missing). Run `install.sh` from a download
 or a package you unpacked yourself, never from `/opt/homepage/current/` or `releases/`.
 
 ## Built-in themes

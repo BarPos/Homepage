@@ -175,14 +175,30 @@ apt_has_candidate() {
     [[ -n "$c" && "$c" != "(none)" ]]
 }
 
-run_server() { # run_server RELEASE_DIR ARGS...: the server CLI as the service user (never as root)
+# run_server RELEASE_DIR ARGS...: the server CLI as the service user, never as root, in the same sandbox as
+# homepage.service (systemd-run) and detached from this terminal (no access to what the admin types later).
+# stdin is passed through (passwords for --create-local-account / --reset-local-password).
+run_server() {
     local release="$1"
     shift
-    (cd "$release" && runuser -u "$SERVICE_USER" -- env -i \
-        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/nonexistent LANG=C.UTF-8 \
-        ASPNETCORE_ENVIRONMENT=Production HOMEPAGE_CONFIG="$CONFIG_FILE" \
-        DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-        "$release/Homepage.Server" "$@")
+    if [[ -d /run/systemd/system ]] && command -v systemd-run >/dev/null 2>&1; then
+        systemd-run --quiet --wait --collect --pipe --service-type=exec \
+            -p User="$SERVICE_USER" -p Group="$SERVICE_USER" -p WorkingDirectory="$release" \
+            -p NoNewPrivileges=yes -p ProtectSystem=strict -p ReadWritePaths="$INSTALL_ROOT/data" -p ProtectHome=yes \
+            -p PrivateTmp=yes -p PrivateDevices=yes -p ProtectKernelTunables=yes -p ProtectKernelModules=yes \
+            -p ProtectKernelLogs=yes -p ProtectControlGroups=yes -p ProtectClock=yes -p ProtectHostname=yes \
+            -p RestrictSUIDSGID=yes -p RestrictRealtime=yes -p RestrictNamespaces=yes -p LockPersonality=yes \
+            -p RestrictAddressFamilies="AF_UNIX AF_INET AF_INET6 AF_NETLINK" -p SystemCallArchitectures=native -p UMask=0077 \
+            -E PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin -E HOME=/nonexistent -E LANG=C.UTF-8 \
+            -E ASPNETCORE_ENVIRONMENT=Production -E HOMEPAGE_CONFIG="$CONFIG_FILE" -E DOTNET_NOLOGO=1 -E DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+            -- "$release/Homepage.Server" "$@"
+    else
+        (cd "$release" && setsid --wait runuser -u "$SERVICE_USER" -- env -i \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/nonexistent LANG=C.UTF-8 \
+            ASPNETCORE_ENVIRONMENT=Production HOMEPAGE_CONFIG="$CONFIG_FILE" \
+            DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+            "$release/Homepage.Server" "$@")
+    fi
 }
 
 installed_version() {
@@ -733,7 +749,10 @@ write_config() {
     info "Writing $CONFIG_FILE"
     local cs
     cs="Host=$(cs_value "$DB_HOST");Port=$DB_PORT;Database=$(cs_value "$DB_NAME");Username=$(cs_value "$DB_USER");Password=$(cs_value "$DB_PASSWORD");SSL Mode=$(npgsql_sslmode "$DB_SSLMODE")"
-    local tmp site_cert
+    local tmp site_cert forwarded=false
+    # Bound to loopback, every request comes from a proxy on this machine: trust its X-Forwarded-* (loopback only),
+    # so rate limits and the audit log see the visitor, and the admin cookie is marked Secure behind HTTPS.
+    if bind_is_loopback; then forwarded=true; fi
     if [[ "$SITE_MODE" == http ]]; then
         site_cert='"Certificate": "", "CertificateKey": ""'
     else
@@ -744,7 +763,7 @@ write_config() {
 {
   "ConnectionStrings": { "Default": "$(json_escape "$cs")" },
   "Site":      { "Urls": "$(json_escape "$(kestrel_url)")", $site_cert,
-                 "ForwardedHeaders": { "Enabled": false, "KnownProxies": [], "KnownNetworks": [] } },
+                 "ForwardedHeaders": { "Enabled": $forwarded, "KnownProxies": [], "KnownNetworks": [] } },
   "Paths":     { "Data": "$INSTALL_ROOT/data", "Backups": "$INSTALL_ROOT/backups" },
   "Updates":   { "GitHubRepository": "$(json_escape "$GITHUB_REPOSITORY")", "Channel": "stable", "CheckIntervalHours": 24, "GitHubToken": "" }
 }
@@ -761,10 +780,25 @@ write_update_env() { # root-only copy of the database settings for update.sh (pg
     tmp="$(mktemp "$INSTALL_ROOT/config/.update-env.XXXXXX")"
     (umask 077; printf '%s\n' "# Used by $INSTALL_ROOT/bin/update.sh. root only." \
         "PGHOST=$DB_HOST" "PGPORT=$DB_PORT" "PGDATABASE=$DB_NAME" "PGUSER=$DB_USER" "PGPASSWORD=$DB_PASSWORD" \
-        "PGSSLMODE=$DB_SSLMODE" "PG_BIN=$PG_BIN" "HEALTH_URL=$(health_url)" >"$tmp")
+        "PGSSLMODE=$DB_SSLMODE" "PG_BIN=$PG_BIN" "HEALTH_URL=$(health_url)" "GITHUB_REPOSITORY=$GITHUB_REPOSITORY" >"$tmp")
     chown root:root "$tmp"
     chmod 600 "$tmp"
     mv -T -- "$tmp" "$UPDATE_ENV"
+}
+
+# Older installs have no GITHUB_REPOSITORY in update.env, which update.sh now needs to verify a release against
+# GitHub. Added (root-only file, temp file + rename) on repair and upgrade.
+ensure_update_env_repo() {
+    [[ -f "$UPDATE_ENV" && ! -L "$UPDATE_ENV" ]] || return 0
+    grep -q '^GITHUB_REPOSITORY=' "$UPDATE_ENV" && return 0
+    [[ -n "$GITHUB_REPOSITORY" ]] || { warn "GITHUB_REPOSITORY is empty: self-updates cannot be verified and will be refused"; return 0; }
+    local tmp
+    tmp="$(mktemp "$INSTALL_ROOT/config/.update-env.XXXXXX")"
+    (umask 077; cat -- "$UPDATE_ENV" >"$tmp"; printf 'GITHUB_REPOSITORY=%s\n' "$GITHUB_REPOSITORY" >>"$tmp")
+    chown root:root "$tmp"
+    chmod 600 "$tmp"
+    mv -T -- "$tmp" "$UPDATE_ENV"
+    info "Added GITHUB_REPOSITORY=$GITHUB_REPOSITORY to $UPDATE_ENV"
 }
 
 write_state() {
@@ -896,11 +930,12 @@ Homepage $version is installed.
 Put Caddy or nginx in front of it for HTTPS with Let's Encrypt, for example with Caddy:
 
   $SERVER_NAME {
+      @health path /healthz /healthz/*
+      respond @health 404
       reverse_proxy $(url_host "$SITE_BIND"):$SITE_PORT
   }
 
-Then set "Site": { "ForwardedHeaders": { "Enabled": true, ... } } in $CONFIG_FILE
-(restart: systemctl restart homepage), and block /healthz in the proxy.
+Forwarded headers from this machine are already trusted (Site:ForwardedHeaders in $CONFIG_FILE).
 
 EOF
     elif bind_is_loopback; then
@@ -974,7 +1009,7 @@ do_repair() {
     # update.sh, backup.sh and the units run as root, so they never come from current/ (a self-update staged by the
     # service user decides what is in there). With --package or --version they are taken from that package, after
     # the same checks as an install; without, the installed copies are kept.
-    local missing pkgdir=""
+    local missing pkgdir="" repoint_current=0
     if [[ -z "$PACKAGE" && -z "$VERSION_ARG" ]]; then
         missing="$(missing_deploy_files)"
         [[ -z "$missing" ]] || die "missing: ${missing//$'\n'/, }. Run install.sh --repair --package FILE (or --version $version) to reinstall them from a verified package"
@@ -982,8 +1017,13 @@ do_repair() {
     install_packages
     if [[ -n "$PACKAGE" || -n "$VERSION_ARG" ]]; then
         obtain_package
-        [[ "$PKG_VERSION" == "$version" ]] ||
-            warn "the package is $PKG_VERSION, the running release is $version: only update.sh, backup.sh and the units are taken from it"
+        # The verified package also becomes the running program (recovery from an unexpected release). Never older:
+        # the database may already be migrated past it; restore a backup for that (install.sh --restore).
+        if [[ "$PKG_VERSION" != "$version" ]] && ! hp_version_gt "$PKG_VERSION" "$version"; then
+            die "the package ($PKG_VERSION) is older than the running release ($version). To go back, restore a backup: install.sh --restore FILE"
+        fi
+        unpack_release
+        repoint_current=1
         pkgdir="$WORK/pkg"
         HP_ERROR=""
         hp_safe_unpack "$PKG_FILE" "$pkgdir" || die "unsafe or broken package: $HP_ERROR"
@@ -997,7 +1037,13 @@ do_repair() {
         systemctl daemon-reload
     fi
     [[ -f "$UPDATE_ENV" ]] || warn "$UPDATE_ENV is missing: self-update will fail until it exists"
+    ensure_update_env_repo
     [[ -f "$CONFIG_FILE" ]] || die "$CONFIG_FILE is missing; restore it or run --purge and install again"
+    if ((repoint_current)); then
+        systemctl stop homepage.service || true
+        hp_switch_current "$INSTALL_ROOT/releases/$PKG_VERSION"
+        info "The running program is now the verified package $PKG_VERSION"
+    fi
     migrate "$INSTALL_ROOT/current"
     start_services
     print_summary
@@ -1012,8 +1058,13 @@ do_upgrade() {
     obtain_package
     hp_version_gt "$PKG_VERSION" "$current" || die "$PKG_VERSION is not newer than the installed $current (downgrades are not offered)"
     [[ -f "$UPDATE_ENV" ]] || die "$UPDATE_ENV is missing; run --repair first"
+    ensure_update_env_repo
     info "Upgrading $current to $PKG_VERSION with update.sh (backup, migrations, health check, rollback)"
     fix_permissions
+    # update.sh accepts only a package it can verify: published on GitHub, or approved here by root (this package,
+    # which the admin chose and which was checked against its SHA256SUMS.txt).
+    (umask 077; printf '%s %s\n' "$PKG_VERSION" "$(hp_sha256 "$PKG_FILE")" >"$INSTALL_ROOT/config/upgrade-approved")
+    chown root:root "$INSTALL_ROOT/config/upgrade-approved"
 
     # New updater and units from the package (chosen by the admin running this script).
     local pkgdir="$WORK/pkg"

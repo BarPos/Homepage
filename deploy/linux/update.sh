@@ -19,6 +19,9 @@
 # Needs /opt/homepage/config/update.env (root:root 600, written by install.sh), key=value lines:
 #   PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD PGSSLMODE  (for pg_dump / pg_restore)
 #   HEALTH_URL (e.g. http://127.0.0.1:5080/healthz or https://127.0.0.1:443/healthz), optional PG_BIN (folder of pg_dump matching the server)
+#   GITHUB_REPOSITORY (owner/name): the package must match the SHA256SUMS.txt that root downloads from that
+#   repository's release v<version> itself. Files the service user staged are never the only proof: a compromised
+#   server process could stage any program with matching hashes.
 #
 # Usage: update.sh            apply a pending request (what the systemd unit runs)
 #        update.sh --self-test   run the built-in checks of the validation functions (no root needed)
@@ -30,6 +33,7 @@ HP_SERVICE="homepage.service"
 HEALTH_TIMEOUT_SECONDS=120
 KEEP_RELEASES=3
 MAX_REQUEST_BYTES=4096
+MAX_PACKAGE_BYTES=$((1024 * 1024 * 1024))
 
 # ------------------------------------------------------------------------------------------------ functions
 # All functions below are side-effect free unless noted, so tests can source this file (main runs only when the
@@ -60,6 +64,9 @@ hp_version_gt() { local c; c="$(hp_version_cmp "$1" "$2")" || return 1; [[ "$c" 
 hp_is_guid() { [[ "${1-}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; }
 hp_is_sha256() { [[ "${1-}" =~ ^[0-9a-f]{64}$ ]]; }
 hp_is_arch() { [[ "${1-}" == x64 || "${1-}" == arm64 ]]; }
+
+# owner/name of a GitHub repository.
+hp_is_repo() { [[ "${1-}" =~ ^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$ && "${1-}" != *..* ]]; }
 
 # TCP port 1-65535, no leading zeros.
 hp_is_port() { [[ "${1-}" =~ ^[1-9][0-9]{0,4}$ ]] && ((10#$1 <= 65535)); }
@@ -135,6 +142,7 @@ hp_read_env_file() {
             PGHOST|PGPORT|PGDATABASE|PGUSER|PGPASSWORD|PGSSLMODE) export "$key=$value" ;;
             HEALTH_URL) HEALTH_URL="$value" ;;
             PG_BIN) PG_BIN="$value" ;;
+            GITHUB_REPOSITORY) GITHUB_REPOSITORY="$value" ;;
         esac
     done <"$file"
 }
@@ -413,17 +421,68 @@ hp_switch_current() {
     mv -Tf -- "$tmp" "$HP_ROOT/current"
 }
 
+# hp_sandboxed_run USER WORKDIR CONFIG PROGRAM ARGS...: runs a release's program as USER with the same sandbox as
+# homepage.service (systemd-run), detached from root's terminal and without root's open files. Without systemd
+# (containers used for tests), it falls back to runuser in a new session. stdin/stdout/stderr are passed through.
+hp_sandboxed_run() {
+    local user="$1" workdir="$2" config="$3"
+    shift 3
+    local root
+    root="$(dirname -- "$(dirname -- "$config")")"
+    if [[ -d /run/systemd/system ]] && command -v systemd-run >/dev/null 2>&1; then
+        systemd-run --quiet --wait --collect --pipe --service-type=exec \
+            -p User="$user" -p Group="$user" -p WorkingDirectory="$workdir" \
+            -p NoNewPrivileges=yes -p ProtectSystem=strict -p ReadWritePaths="$root/data" -p ProtectHome=yes \
+            -p PrivateTmp=yes -p PrivateDevices=yes -p ProtectKernelTunables=yes -p ProtectKernelModules=yes \
+            -p ProtectKernelLogs=yes -p ProtectControlGroups=yes -p ProtectClock=yes -p ProtectHostname=yes \
+            -p RestrictSUIDSGID=yes -p RestrictRealtime=yes -p RestrictNamespaces=yes -p LockPersonality=yes \
+            -p RestrictAddressFamilies="AF_UNIX AF_INET AF_INET6 AF_NETLINK" -p SystemCallArchitectures=native -p UMask=0077 \
+            -E PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin -E HOME=/nonexistent -E LANG=C.UTF-8 \
+            -E ASPNETCORE_ENVIRONMENT=Production -E HOMEPAGE_CONFIG="$config" -E DOTNET_NOLOGO=1 -E DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+            -- "$@" 9>&-
+    else
+        (cd "$workdir" && setsid --wait runuser -u "$user" -- env -i \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/nonexistent LANG=C.UTF-8 \
+            ASPNETCORE_ENVIRONMENT=Production HOMEPAGE_CONFIG="$config" DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+            "$@" 9>&-)
+    fi
+}
+
 hp_run_as_service_user() {
     # Runs a release's server binary as the service user, from the release folder, with the production config.
     local release="$1"
     shift
-    (cd "$release" && runuser -u "$HP_USER" -- env -i \
-        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-        HOME=/nonexistent LANG=C.UTF-8 \
-        ASPNETCORE_ENVIRONMENT=Production \
-        HOMEPAGE_CONFIG="$HP_ROOT/config/appsettings.Production.json" \
-        DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-        "$release/Homepage.Server" "$@")
+    hp_sandboxed_run "$HP_USER" "$release" "$HP_ROOT/config/appsettings.Production.json" "$release/Homepage.Server" "$@" </dev/null
+}
+
+# hp_read_as_service_user SRC DST MAXBYTES: copies a file from the service user's folders by reading it AS the service
+# user (so links, swaps and FIFOs gain nothing root could read), with a size cap and a timeout. Fails when bigger.
+hp_read_as_service_user() {
+    local src="$1" dst="$2" max="$3"
+    timeout 300 runuser -u "$HP_USER" -- head -c "$((max + 1))" -- "$src" >"$dst" 2>/dev/null </dev/null || return 1
+    (($(stat -c %s -- "$dst") <= max))
+}
+
+# hp_verify_published NAME FILE: the package's SHA-256 must be the one in the SHA256SUMS.txt of release v$REQ_VERSION,
+# downloaded by root from GitHub (HTTPS only), not the copy the service user staged.
+hp_verify_published() {
+    local name="$1" file="$2" official approved="$HP_ROOT/config/upgrade-approved" line=""
+    # install.sh --upgrade with a package the admin chose (also offline) approves exactly that package: a root-only
+    # file in config/, which the service user cannot write. Used once.
+    if [[ -f "$approved" && ! -L "$approved" && "$(stat -c %u -- "$approved")" == 0 ]]; then
+        IFS= read -r line <"$approved" || true
+        rm -f -- "$approved"
+        if [[ "$line" == "$REQ_VERSION $(hp_sha256 "$file")" ]]; then hp_log "package approved by install.sh"; return 0; fi
+    fi
+    hp_is_repo "${GITHUB_REPOSITORY-}" ||
+        hp_fail "update.env has no valid GITHUB_REPOSITORY; refresh the root scripts with install.sh --repair --version <running version>"
+    curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --max-time 120 --max-filesize 65536 \
+        -o "$WORK/SHA256SUMS.published" \
+        "https://github.com/$GITHUB_REPOSITORY/releases/download/v$REQ_VERSION/SHA256SUMS.txt" ||
+        hp_fail "cannot download SHA256SUMS.txt of release v$REQ_VERSION from github.com/$GITHUB_REPOSITORY"
+    official="$(hp_sums_lookup "$WORK/SHA256SUMS.published" "$name")" || hp_fail "release v$REQ_VERSION has no $name"
+    [[ "$(hp_sha256 "$file")" == "$official" ]] ||
+        hp_fail "$name is not the package published in release v$REQ_VERSION of $GITHUB_REPOSITORY"
 }
 
 hp_rollback() {
@@ -481,11 +540,12 @@ hp_main() {
     local size
     # A link at data/updates is removed itself (unlink does not follow it), never anything behind it.
     if [[ -L "$updates" || ! -d "$updates" ]]; then [[ ! -L "$updates" ]] || rm -f -- "$updates"; hp_fail "$updates is not a folder"; fi
-    if [[ -L "$request" || ! -f "$request" ]]; then rm -f -- "$request"; hp_fail "the request is not a regular file"; fi
-    size="$(stat -c %s -- "$request")"
-    if ((size > MAX_REQUEST_BYTES)); then rm -f -- "$request"; hp_fail "the request file is too large"; fi
-    cp -- "$request" "$WORK/request.conf"
-    rm -f -- "$request"
+    # Read and remove it as the service user: whatever it points to by then, root never follows it.
+    hp_read_as_service_user "$request" "$WORK/request.conf" "$MAX_REQUEST_BYTES" || {
+        runuser -u "$HP_USER" -- rm -f -- "$request" </dev/null || true
+        hp_fail "the request is not a readable file of at most $MAX_REQUEST_BYTES bytes"
+    }
+    runuser -u "$HP_USER" -- rm -f -- "$request" </dev/null || hp_fail "cannot remove the request"
 
     HP_ERROR=""
     hp_parse_request "$WORK/request.conf" || hp_fail "invalid request: $HP_ERROR"
@@ -493,7 +553,7 @@ hp_main() {
     local env_file="$HP_ROOT/config/update.env"
     [[ -f "$env_file" && ! -L "$env_file" ]] || hp_fail "$env_file is missing (re-run install.sh to repair)"
     [[ "$(stat -c %u -- "$env_file")" == 0 ]] || hp_fail "$env_file is not owned by root"
-    HEALTH_URL="" PG_BIN=""
+    HEALTH_URL="" PG_BIN="" GITHUB_REPOSITORY=""
     hp_read_env_file "$env_file"
     [[ -n "$HEALTH_URL" && -n "${PGDATABASE-}" ]] || hp_fail "$env_file lacks HEALTH_URL or PGDATABASE"
 
@@ -510,17 +570,13 @@ hp_main() {
     # Copy package and sums out of the service user's folder before checking them (no link games, no swaps).
     local stage_dir="$updates/$REQ_VERSION" name
     name="$(hp_tarball_name "$REQ_VERSION" "$arch")"
-    [[ -d "$stage_dir" && ! -L "$stage_dir" ]] || hp_fail "$stage_dir is missing"
-    [[ -f "$stage_dir/$name" && ! -L "$stage_dir/$name" ]] || hp_fail "the package $name is missing"
-    [[ -f "$stage_dir/SHA256SUMS.txt" && ! -L "$stage_dir/SHA256SUMS.txt" ]] || hp_fail "SHA256SUMS.txt is missing"
-    cp -- "$stage_dir/$name" "$WORK/$name"
-    cp -- "$stage_dir/SHA256SUMS.txt" "$WORK/SHA256SUMS.txt"
+    hp_read_as_service_user "$stage_dir/$name" "$WORK/$name" "$MAX_PACKAGE_BYTES" || hp_fail "the package $name is missing or too large"
 
-    # Check the hash again (catches corruption; the sums file sits in a folder the service user can write).
-    local actual expected
+    # The staged hash only proves the copy is intact; the published SHA256SUMS.txt proves it is the real release.
+    local actual
     actual="$(hp_sha256 "$WORK/$name")"
-    expected="$(hp_sums_lookup "$WORK/SHA256SUMS.txt" "$name")" || hp_fail "SHA256SUMS.txt has no entry for $name"
-    [[ "$actual" == "$expected" && "$actual" == "$REQ_SHA256" ]] || hp_fail "SHA-256 mismatch for $name"
+    [[ "$actual" == "$REQ_SHA256" ]] || hp_fail "SHA-256 mismatch for $name"
+    hp_verify_published "$name" "$WORK/$name"
 
     # Unpack safely into releases/<version>.
     local releases="$HP_ROOT/releases" release="$HP_ROOT/releases/$REQ_VERSION" staging="$HP_ROOT/releases/.staging-$REQ_VERSION"
@@ -583,6 +639,14 @@ hp_self_test() {
     f hp_version_gt 1.2.3 1.2.3
     f hp_version_gt 1.2.2 1.2.3
     f hp_version_gt 1.2.3-rc 1.0.0
+    t hp_is_repo BarPos/Homepage
+    t hp_is_repo my-org/my.site_2
+    f hp_is_repo BarPos
+    f hp_is_repo "BarPos/Homepage/x"
+    f hp_is_repo "../etc/passwd"
+    f hp_is_repo "a/.."
+    f hp_is_repo "evil.example/x?y"
+    f hp_is_repo ""
     t hp_is_guid 0f8fad5b-d9cb-469f-a165-70867728950e
     f hp_is_guid ../../etc
     t hp_is_sha256 "$(printf 'a%.0s' {1..64})"

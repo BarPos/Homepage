@@ -60,6 +60,9 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
         CancellationToken ct = default)
     {
         if (!p.Has(groupId, Perm.Create)) throw new AccessDeniedException("You cannot upload into that group.");
+        await using (var check = await dbFactory.CreateDbContextAsync(ct))
+            if (!await check.Groups.AnyAsync(g => g.Id == groupId && g.Valid && !g.IsSystem, ct))
+                throw new AccessDeniedException("Files cannot be uploaded into that group.");
         Directory.CreateDirectory(paths.Value.MediaDirectory);
         var head = new byte[16];
         var read = await content.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, ct);
@@ -105,10 +108,30 @@ public sealed class MediaService(IDbContextFactory<AppDbContext> dbFactory, IOpt
         if (!p.Has(m.GroupId, Perm.Ro)) throw new NotFoundException();
         var own = m.UploadedById == p.UserId && p.Has(m.GroupId, Perm.Create);
         if (!p.Has(m.GroupId, Perm.Delete) && !own) throw new AccessDeniedException();
+        // Like own unpublished content: deleting one's own upload without delete is fine until it is used publicly.
+        if (!p.Has(m.GroupId, Perm.Delete) && await IsUsedPubliclyAsync(db, id, ct))
+            throw new AccessDeniedException("The file is used on published pages or as the logo or favicon; deleting it needs delete.");
         db.Media.Remove(m);
         await db.SaveChangesAsync(ct);
         try { File.Delete(Path.Combine(paths.Value.MediaDirectory, m.StoredName)); } catch (IOException) { }
         await audit.WriteAsync(actor, "media.delete", "Media", id.ToString(), m.FileName, ct: ct);
+    }
+
+    private static async Task<bool> IsUsedPubliclyAsync(AppDbContext db, int id, CancellationToken ct)
+    {
+        var used = await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM content_items
+            WHERE "Status" = 1 AND "Blocks" IS NOT NULL
+              AND jsonb_path_exists("Blocks", '$.** ? (@.mediaId == $id)', jsonb_build_object('id', {id}))
+            """).SingleAsync(ct);
+        if (used > 0) return true;
+        var key = id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (await db.Settings.AnyAsync(s => (s.Key == SiteSettings.LogoKey || s.Key == SiteSettings.FaviconKey) && s.Value == key, ct)) return true;
+        return await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM themes
+            WHERE jsonb_path_exists("HeaderBlocks", '$.** ? (@.mediaId == $id)', jsonb_build_object('id', {id}))
+               OR jsonb_path_exists("FooterBlocks", '$.** ? (@.mediaId == $id)', jsonb_build_object('id', {id}))
+            """).SingleAsync(ct) > 0;
     }
 
     /// <summary>Path of a stored file, or null; the name must be exactly one of ours (no traversal).</summary>

@@ -139,9 +139,23 @@ do_create() {
     # Protection keys, generated theme CSS). The server keeps running: a file in data/ (e.g. a media upload or a
     # regenerated theme) may change or disappear while tar reads it. tar then exits with 1, which still leaves a
     # usable archive; 2 and above are real errors.
-    local rc=0
-    tar --create --numeric-owner --warning=no-file-changed --warning=no-file-removed --file="$WORK/backup/files.tar" \
-        -C / --exclude="${HP_ROOT#/}/data/updates" "${paths[@]}" || rc=$?
+    #
+    # Only what a restore accepts goes in: folders, and regular files with a single link and no setuid/setgid bit.
+    # Links, FIFOs, sockets, devices and hard links in data/ (the service user can create those) are left out and
+    # reported, so a compromised server cannot make every later backup unrestorable. --sparse keeps a huge sparse
+    # file from filling the disk.
+    local list="$WORK/files.list" skipped="$WORK/skipped.list" rc=0
+    (cd / && find "${paths[@]}" -path "${HP_ROOT#/}/data/updates" -prune -o \
+        \( -type d -o \( -type f -links 1 ! -perm /6000 \) \) -print0) >"$list"
+    (cd / && find "${paths[@]}" -path "${HP_ROOT#/}/data/updates" -prune -o \
+        ! -type d ! \( -type f -links 1 ! -perm /6000 \) -print) >"$skipped"
+    if [[ -s "$skipped" ]]; then
+        warn "$(wc -l <"$skipped") entries were left out because a restore would refuse them (links, special or hard-linked files, setuid/setgid):"
+        head -n 20 "$skipped" | sed 's|^|  /|' >&2
+    fi
+    # -C must come before --files-from (GNU tar applies it positionally).
+    tar --create --numeric-owner --sparse --warning=no-file-changed --warning=no-file-removed \
+        --file="$WORK/backup/files.tar" -C / --no-recursion --null --files-from="$list" || rc=$?
     ((rc <= 1)) || die "tar failed ($rc) while collecting the files"
     ((rc == 0)) || warn "some files in data/ changed while they were read (the server is running); the backup is still usable"
 

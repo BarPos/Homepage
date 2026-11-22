@@ -63,14 +63,14 @@ With `http` on loopback, the installer prints a Caddy block for your server name
 
 ```
 www.example.com {
-    @health path /healthz
+    @health path /healthz /healthz/*
     respond @health 404
     reverse_proxy 127.0.0.1:5080
 }
 ```
 
-Then enable forwarded headers (see [Configuration](configuration.md#site)), so the server sees the visitor's address
-and scheme.
+Bound to loopback, the installer also enables forwarded headers (see [Configuration](configuration.md#site)), so the
+server sees the visitor's address and scheme.
 
 {: .warning }
 `https` mode has **no automatic renewal**. A certificate copied into `config/` expires unless you replace it and
@@ -150,7 +150,7 @@ Each item also has a flag:
 
 | Command | Effect |
 |---|---|
-| `install.sh --repair` | Re-applies owners and modes and restarts the services; never overwrites config or data. Keeps the installed `update.sh`, `backup.sh` and units; with `--package FILE` or `--version X.Y.Z` it reinstalls them from that package |
+| `install.sh --repair` | Re-applies owners and modes and restarts the services; never overwrites config or data. Keeps the installed `update.sh`, `backup.sh` and units; with `--package FILE` or `--version X.Y.Z` it reinstalls them, and the program, from that package (same or newer version) |
 | `install.sh --upgrade --package FILE` | Installs a newer release through the same path as the admin's *Update now* |
 | `install.sh --backup [--output PATH]` | Backs up the database, configuration, data (media, keys) and the running program (see [Backup and restore](operations.md#backup-and-restore)) |
 | `install.sh --restore FILE` | Restores a backup on this server (asks for confirmation; `--yes` when unattended) |

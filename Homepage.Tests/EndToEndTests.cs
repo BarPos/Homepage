@@ -101,6 +101,20 @@ public sealed class EndToEndTests(PostgresFixture pg)
             Assert.Equal(HttpStatusCode.BadRequest, applied.StatusCode);
             Assert.Contains("\"error\":", await applied.Content.ReadAsStringAsync());
 
+            // CSRF: an admin POST that reads no form still needs the token
+            var noToken = await client.PostAsync($"/admin/content/{target["content-".Length..]}/unpublish", null);
+            Assert.Equal(HttpStatusCode.BadRequest, noToken.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/contact")).StatusCode); // still published
+
+            // an empty HX-Request header must not put a fragment in the public cache
+            var poison = new HttpRequestMessage(HttpMethod.Get, "/");
+            poison.Headers.TryAddWithoutValidation("HX-Request", "");
+            await client.SendAsync(poison);
+            Assert.Contains("<!DOCTYPE html>", await client.GetStringAsync("/"), StringComparison.OrdinalIgnoreCase);
+
+            // /healthz answers only on its exact path
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/healthz/")).StatusCode);
+
             // security headers
             var head = await client.GetAsync("/contact");
             Assert.Contains("frame-ancestors 'none'", head.Headers.GetValues("Content-Security-Policy").Single());
@@ -207,6 +221,16 @@ public sealed class EndToEndTests(PostgresFixture pg)
             var blogTarget = blogPage.Headers.Location!.ToString().Split('/').Last();
             using (var scope = app.Services.CreateScope())
                 Assert.Equal("blog-2", scope.ServiceProvider.GetRequiredService<Homepage.Data.AppDbContext>().ContentItems.Single(c => c.Id == int.Parse(blogTarget.Substring(8))).Slug);
+
+            // a password reset ends the user's existing sessions
+            var other = await SignInAsync(app, "writer", "writer-password-1");
+            Assert.Equal(HttpStatusCode.OK, (await other.GetAsync("/admin")).StatusCode);
+            var reset = await admin.PostAsync($"/admin/users/{userId}/password", Form(("__RequestVerificationToken", adminToken), ("password", "writer-password-2")));
+            Assert.Equal(HttpStatusCode.Redirect, reset.StatusCode);
+            var afterReset = await other.GetAsync("/admin");
+            Assert.Equal(HttpStatusCode.Redirect, afterReset.StatusCode);
+            Assert.Contains("/admin/login", afterReset.Headers.Location!.ToString());
+            author = await SignInAsync(app, "writer", "writer-password-2");
 
             // revoking the role takes effect on the next request
             Assert.Equal(HttpStatusCode.NoContent, (await Htmx(admin, adminToken, "/admin/permissions/user-roles", ("userId", userId), ("roleId", authorRole.ToString()), ("member", "false"))).StatusCode);

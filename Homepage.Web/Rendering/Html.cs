@@ -16,9 +16,13 @@ public static class Html
     public static RazorComponentResult<T> Render<T>(IReadOnlyDictionary<string, object?> parameters, int status = 200) where T : IComponent =>
         new(parameters) { StatusCode = status };
 
-    /// <summary>htmx partial request (not hx-boost navigation, which expects a full page).</summary>
+    /// <summary>
+    /// htmx partial request (not hx-boost navigation, which expects a full page). Only the exact value "true" counts:
+    /// the output cache varies on the header's value, and an empty or odd value must get the same full page as no header,
+    /// or an anonymous request could put a fragment in the cache for everyone.
+    /// </summary>
     public static bool IsFragmentRequest(HttpRequest r) =>
-        r.Headers.ContainsKey("HX-Request") && !r.Headers.ContainsKey("HX-Boosted");
+        r.Headers["HX-Request"].ToString() == "true" && r.Headers["HX-Boosted"].ToString() != "true";
 }
 
 public sealed class RenderContextFactory(IDbContextFactory<AppDbContext> dbFactory, ThemeService themes)

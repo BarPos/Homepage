@@ -33,7 +33,7 @@ public sealed class AccountService(
         var user = new User
         {
             UserName = userName, DisplayName = string.IsNullOrWhiteSpace(displayName) ? userName : displayName.Trim(),
-            CreatedAtUtc = time.GetUtcNow().UtcDateTime, LockoutEnabled = true,
+            CreatedAtUtc = time.GetUtcNow().UtcDateTime,
         };
         var created = await users.CreateAsync(user, password);
         if (!created.Succeeded) return (OperationResult.Fail(string.Join(" ", created.Errors.Select(e => e.Description))), null);
@@ -68,6 +68,7 @@ public sealed class AccountService(
         await using var db = await dbFactory.CreateDbContextAsync();
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId) ?? throw new Content.NotFoundException();
         user.Valid = valid;
+        if (!valid) user.SecurityStamp = Guid.NewGuid().ToString("N"); // ends every session, also after re-enabling
         await db.SaveChangesAsync();
         await permissions.BumpVersionAsync(db);
         await audit.WriteAsync(actor, valid ? "user.valid" : "user.invalid", "User", userId.ToString(), user.UserName ?? "");

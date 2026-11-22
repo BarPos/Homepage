@@ -28,6 +28,14 @@ public sealed class MarkdownRenderer
         s.AllowedAttributes.Add("id");
         s.AllowedSchemes.Add("mailto");
         s.AllowedSchemes.Add("tel");
+        // No forms or controls in content: a hidden form on a public page could make a signed-in admin's click submit
+        // an admin action (the site is one origin). No positioning, so content cannot cover the page with an overlay.
+        foreach (var tag in new[] { "form", "input", "button", "select", "option", "optgroup", "textarea", "label", "fieldset", "legend", "datalist", "output" })
+            s.AllowedTags.Remove(tag);
+        foreach (var attr in new[] { "action", "formaction", "method", "formmethod", "for", "form" })
+            s.AllowedAttributes.Remove(attr);
+        foreach (var prop in new[] { "position", "z-index", "inset", "top", "left", "right", "bottom" })
+            s.AllowedCssProperties.Remove(prop);
         return s;
     }
 }

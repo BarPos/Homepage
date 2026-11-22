@@ -77,7 +77,7 @@ public sealed class BlogService(IDbContextFactory<AppDbContext> dbFactory, IMemo
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var blog = await db.Blogs.FirstOrDefaultAsync(b => b.Id == id, ct) ?? throw new NotFoundException();
         if (await db.ContentItems.AnyAsync(c => c.BlogId == id, ct))
-            throw new ConflictException("The blog still has posts. Move or delete them first.");
+            throw new ConflictException("The blog still has posts (perhaps in groups you cannot see). They must be moved or deleted first.");
         if (await db.Blogs.CountAsync(ct) == 1) throw new ConflictException("The last blog cannot be deleted.");
         db.Blogs.Remove(blog);
         await db.SaveChangesAsync(ct);

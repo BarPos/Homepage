@@ -30,7 +30,7 @@ Set per user (or role) and per group:
 |---|---|
 | `ro` | See items in the admin, including drafts and revisions |
 | `create` | Create items, and edit and delete **their own items that were never published** |
-| `edit` | Edit anyone's items (the draft; publishing needs `publish`) |
+| `edit` | Edit anyone's items (the draft; publishing, and changing the title, address or blog of a published item, needs `publish`) |
 | `publish` | Publish and unpublish items |
 | `delete` | Delete anyone's items |
 | `rw` | **Everything above**, and moving items to another group where you have `create` |
