@@ -6,7 +6,7 @@ namespace Homepage.Shared;
 /// </summary>
 public static class AppVersion
 {
-    public const string Current = "0.4.0";
+    public const string Current = "0.4.1";
 
     public static Version CurrentVersion { get; } = Normalize(Version.Parse(Current));
 

@@ -34,6 +34,9 @@ HEALTH_TIMEOUT_SECONDS=120
 KEEP_RELEASES=3
 MAX_REQUEST_BYTES=4096
 MAX_PACKAGE_BYTES=$((1024 * 1024 * 1024))
+# Where releases come from when update.env does not say (installs made before update.env had GITHUB_REPOSITORY).
+# The same value as in install.sh. This script is root-owned and only ever comes from a package install.sh verified.
+HP_DEFAULT_REPOSITORY="BarPos/Homepage"
 
 # ------------------------------------------------------------------------------------------------ functions
 # All functions below are side-effect free unless noted, so tests can source this file (main runs only when the
@@ -475,7 +478,7 @@ hp_verify_published() {
         if [[ "$line" == "$REQ_VERSION $(hp_sha256 "$file")" ]]; then hp_log "package approved by install.sh"; return 0; fi
     fi
     hp_is_repo "${GITHUB_REPOSITORY-}" ||
-        hp_fail "update.env has no valid GITHUB_REPOSITORY; refresh the root scripts with install.sh --repair --version <running version>"
+        hp_fail "GITHUB_REPOSITORY in update.env is not owner/name; fix it, or remove the line and run install.sh --repair"
     curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --max-time 120 --max-filesize 65536 \
         -o "$WORK/SHA256SUMS.published" \
         "https://github.com/$GITHUB_REPOSITORY/releases/download/v$REQ_VERSION/SHA256SUMS.txt" ||
@@ -555,6 +558,10 @@ hp_main() {
     [[ "$(stat -c %u -- "$env_file")" == 0 ]] || hp_fail "$env_file is not owned by root"
     HEALTH_URL="" PG_BIN="" GITHUB_REPOSITORY=""
     hp_read_env_file "$env_file"
+    if [[ -z "$GITHUB_REPOSITORY" ]]; then
+        GITHUB_REPOSITORY="$HP_DEFAULT_REPOSITORY"
+        hp_log "$env_file has no GITHUB_REPOSITORY; using $GITHUB_REPOSITORY (install.sh --repair adds it)"
+    fi
     [[ -n "$HEALTH_URL" && -n "${PGDATABASE-}" ]] || hp_fail "$env_file lacks HEALTH_URL or PGDATABASE"
 
     # Versions: plain x.y.z, and newer than the running release only.

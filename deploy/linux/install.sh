@@ -786,19 +786,29 @@ write_update_env() { # root-only copy of the database settings for update.sh (pg
     mv -T -- "$tmp" "$UPDATE_ENV"
 }
 
-# Older installs have no GITHUB_REPOSITORY in update.env, which update.sh now needs to verify a release against
-# GitHub. Added (root-only file, temp file + rename) on repair and upgrade.
+# Older installs have no GITHUB_REPOSITORY in update.env, which update.sh uses to verify a release against GitHub.
+# Added, or an empty or broken value replaced (root-only file, temp file + rename), on repair and upgrade.
 ensure_update_env_repo() {
     [[ -f "$UPDATE_ENV" && ! -L "$UPDATE_ENV" ]] || return 0
-    grep -q '^GITHUB_REPOSITORY=' "$UPDATE_ENV" && return 0
+    if grep -Eq '^GITHUB_REPOSITORY=[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$' "$UPDATE_ENV" &&
+        ! grep -q '^GITHUB_REPOSITORY=.*\.\.' "$UPDATE_ENV"; then
+        return 0
+    fi
     [[ -n "$GITHUB_REPOSITORY" ]] || { warn "GITHUB_REPOSITORY is empty: self-updates cannot be verified and will be refused"; return 0; }
-    local tmp
+    local tmp line
     tmp="$(mktemp "$INSTALL_ROOT/config/.update-env.XXXXXX")"
-    (umask 077; cat -- "$UPDATE_ENV" >"$tmp"; printf 'GITHUB_REPOSITORY=%s\n' "$GITHUB_REPOSITORY" >>"$tmp")
+    # Old GITHUB_REPOSITORY lines are dropped; lines are rewritten one by one, so a missing final newline is harmless.
+    (
+        umask 077
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ "$line" == GITHUB_REPOSITORY=* ]] || printf '%s\n' "$line"
+        done <"$UPDATE_ENV" >"$tmp"
+        printf 'GITHUB_REPOSITORY=%s\n' "$GITHUB_REPOSITORY" >>"$tmp"
+    )
     chown root:root "$tmp"
     chmod 600 "$tmp"
     mv -T -- "$tmp" "$UPDATE_ENV"
-    info "Added GITHUB_REPOSITORY=$GITHUB_REPOSITORY to $UPDATE_ENV"
+    info "Set GITHUB_REPOSITORY=$GITHUB_REPOSITORY in $UPDATE_ENV"
 }
 
 write_state() {
