@@ -1,0 +1,64 @@
+@using System.Globalization
+@* Visitors (area) and page views (line) per hour, day or month, as inline SVG. Hover a column for its numbers. *@
+@{
+    const double W = 1000, H = 260, L = 48, R = 12, T = 14, B = 34;
+    var n = Math.Max(Points.Count, 1);
+    var max = NiceMax(Points.Count == 0 ? 0 : Points.Max(p => Math.Max(p.Pageviews, p.Visitors)));
+    double X(int i) => n == 1 ? L + (W - L - R) / 2 : L + i * (W - L - R) / (n - 1);
+    double Y(double v) => T + (H - T - B) * (1 - v / max);
+    string F(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+    string Line(Func<Homepage.Analytics.AnalyticsPoint, long> sel) => string.Join(" ", Points.Select((p, i) => $"{(i == 0 ? "M" : "L")}{F(X(i))},{F(Y(sel(p)))}"));
+    var area = Points.Count == 0 ? "" : Line(p => p.Visitors) + $" L{F(X(Points.Count - 1))},{F(Y(0))} L{F(X(0))},{F(Y(0))} Z";
+    var labelEvery = Math.Max(1, (int)Math.Ceiling(n / 8.0));
+    var colW = (W - L - R) / n;
+}
+<svg class="an-chart" viewBox="0 0 @W @H" role="img" aria-label="Visitors and page views over time">
+    @for (var g = 0; g <= 4; g++)
+    {
+        var v = max * g / 4;
+        <line class="grid" x1="@L" x2="@(W - R)" y1="@F(Y(v))" y2="@F(Y(v))" />
+        @SvgText(L - 8, Y(v) + 4, "end", AnalyticsFormat.Number(v))
+    }
+    @if (Points.Count > 0)
+    {
+        <path class="area" d="@area" />
+        <path class="line-pv" d="@Line(p => p.Pageviews)" />
+        <path class="line-vis" d="@Line(p => p.Visitors)" />
+        @for (var i = 0; i < Points.Count; i++)
+        {
+            var p = Points[i];
+            if (i % labelEvery == 0)
+            {
+                @SvgText(X(i), H - 10, "middle", AnalyticsFormat.BucketLabel(p.Local, Unit))
+            }
+            <g class="hit">
+                <rect x="@F(X(i) - colW / 2)" y="@T" width="@F(colW)" height="@F(H - T - B)" />
+                <line class="cursor" x1="@F(X(i))" x2="@F(X(i))" y1="@T" y2="@F(H - B)" />
+                <circle cx="@F(X(i))" cy="@F(Y(p.Visitors))" r="4" />
+                <title>@AnalyticsFormat.BucketTitle(p.Local, Unit): @p.Visitors visitors, @p.Pageviews page views</title>
+            </g>
+        }
+    }
+</svg>
+@code {
+    [Parameter] public IReadOnlyList<Homepage.Analytics.AnalyticsPoint> Points { get; set; } = [];
+    [Parameter] public string Unit { get; set; } = "day";
+
+    // Razor reserves <text>, so axis labels are written as markup (values HTML-encoded).
+    private static MarkupString SvgText(double x, double y, string anchor, string label) => new(string.Create(CultureInfo.InvariantCulture,
+        $"<text class=\"axis\" x=\"{x:0.#}\" y=\"{y:0.#}\" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(label)}</text>"));
+
+    private static double NiceMax(double v)
+    {
+        // Four grid steps of a round size (1, 2, 2.5, 5 × 10ⁿ, whole numbers only).
+        if (v <= 4) return 4;
+        var raw = v / 4;
+        var mag = Math.Pow(10, Math.Floor(Math.Log10(raw)));
+        foreach (var m in new[] { 1, 2, 2.5, 5, 10 })
+        {
+            var step = m * mag;
+            if (step >= raw && step == Math.Floor(step)) return step * 4;
+        }
+        return 40 * mag;
+    }
+}

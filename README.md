@@ -60,13 +60,14 @@ output cache), admin with searchable, filterable, paged lists, visual editor (dr
 into the layers tree, drag in the canvas, inspector, device preview, publish), Markdown blocks mixed with visual
 blocks, themes (3 built in, duplicate, live theme editor, editable header and footer with a site bar and logo block),
 menus (create, rename, delete), OTRS-style permission groups (users, groups, roles, the three relation screens,
-effective-permission view), media uploads, audit log, settings, self-update service, CLI, release build,
-installer/updater/backup scripts, CI workflows.
+effective-permission view), media uploads, audit log, settings, profiles with two-factor sign-in, privacy-friendly
+built-in analytics (visitors, visits, sources, countries, devices; no cookies), self-update service, CLI, release
+build, installer/updater/backup scripts, CI workflows.
 
 **Not built yet** (described in techstack.md): undo/redo, inline text editing, splitting and merging Markdown blocks,
 rich-text (Tiptap) block, global blocks, page templates and section presets, theme import/export and theme
 versions, self-hosted fonts, forms and form submissions, scheduled publishing, revision restore and trash, image
-resizing, 2FA, member groups, external group mapping (OIDC/LDAP), release signing, Tailwind (hand-written CSS
+resizing, member groups, external group mapping (OIDC/LDAP), release signing, Tailwind (hand-written CSS
 on the same CSS variables is used instead).
 
 ## Production

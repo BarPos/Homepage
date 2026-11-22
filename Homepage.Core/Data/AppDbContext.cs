@@ -23,6 +23,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<Setting> Settings => Set<Setting>();
     public DbSet<AuditEntry> AuditLog => Set<AuditEntry>();
     public DbSet<UpdateRun> UpdateRuns => Set<UpdateRun>();
+    public DbSet<Analytics.PageView> PageViews => Set<Analytics.PageView>();
+    public DbSet<Analytics.AnalyticsSalt> AnalyticsSalts => Set<Analytics.AnalyticsSalt>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -159,6 +161,29 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.Property(a => a.EntityId).HasMaxLength(100);
             e.Property(a => a.Ip).HasMaxLength(64);
             e.Property(a => a.SignInIp).HasMaxLength(64);
+        });
+        b.Entity<Analytics.PageView>(e =>
+        {
+            e.ToTable("page_views");
+            e.HasIndex(p => p.AtUtc);
+            e.HasIndex(p => new { p.VisitorId, p.AtUtc });
+            e.Property(p => p.Path).HasMaxLength(300);
+            e.Property(p => p.ReferrerHost).HasMaxLength(200);
+            e.Property(p => p.Source).HasMaxLength(100);
+            e.Property(p => p.Channel).HasMaxLength(20);
+            e.Property(p => p.UtmSource).HasMaxLength(100);
+            e.Property(p => p.UtmMedium).HasMaxLength(100);
+            e.Property(p => p.UtmCampaign).HasMaxLength(100);
+            e.Property(p => p.Country).HasMaxLength(2);
+            e.Property(p => p.Browser).HasMaxLength(40);
+            e.Property(p => p.Os).HasMaxLength(40);
+            e.Property(p => p.Device).HasMaxLength(20);
+            e.Property(p => p.PageKey).HasMaxLength(40);
+        });
+        b.Entity<Analytics.AnalyticsSalt>(e =>
+        {
+            e.ToTable("analytics_salts");
+            e.HasKey(s => s.Day);
         });
         b.Entity<UpdateRun>(e =>
         {

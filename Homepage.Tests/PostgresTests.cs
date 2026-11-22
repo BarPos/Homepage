@@ -32,7 +32,7 @@ public sealed class PostgresTests(PostgresFixture pg)
         await using var db = PostgresFixture.Context(cs);
         Assert.False(db.Database.HasPendingModelChanges(), "The model has changes without a migration: run dotnet ef migrations add.");
         await Seeder.SeedAsync(db, Time);
-        Assert.Equal(7, await db.Groups.CountAsync());
+        Assert.Equal(8, await db.Groups.CountAsync()); // 7 system groups and "content"
         Assert.Equal(4, await db.PermissionRoles.CountAsync());
         Assert.Equal(1, await db.Themes.CountAsync(t => t.IsActive));
         Assert.Equal(2, await db.ContentItems.CountAsync());

@@ -67,6 +67,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IServerInstallation, ServerInstallation>();
         services.AddSingleton<ServerUpdateService>();
         services.AddHostedService<UpdatesBackgroundService>();
+
+        services.Configure<Analytics.AnalyticsOptions>(config.GetSection(Analytics.AnalyticsOptions.Section));
+        services.AddSingleton<Analytics.CountryLookup>();
+        services.AddSingleton<Analytics.AnalyticsCollector>();
+        services.AddSingleton<Analytics.AnalyticsQueries>();
+        services.AddHostedService<Analytics.AnalyticsWriter>();
+        services.AddHttpClient(Analytics.GeoDatabaseUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromMinutes(5));
+        services.AddHostedService<Analytics.GeoDatabaseUpdater>();
         return services;
     }
 }

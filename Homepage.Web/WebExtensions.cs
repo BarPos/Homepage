@@ -46,6 +46,9 @@ public static class WebExtensions
             o.AddPolicy("signin", ctx => RateLimitPartition.GetFixedWindowLimiter(
                 SignInLimiter.Network(ctx.Connection.RemoteIpAddress), // IPv6 per /64
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+            o.AddPolicy("analytics", ctx => RateLimitPartition.GetFixedWindowLimiter(
+                SignInLimiter.Network(ctx.Connection.RemoteIpAddress),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
         });
         return services;
     }
@@ -80,6 +83,7 @@ public static class WebExtensions
         app.UseAntiforgery();
         app.UseOutputCache();
         app.MapAdmin();
+        app.MapAnalyticsCollection();
         app.MapSite();
     }
 }

@@ -130,9 +130,17 @@ public static class AdminEndpoints
             return Results.Redirect("/admin/login");
         });
 
-        admin.MapGet("", async (HttpContext http, ContentService content, ThemeService themes, BlogService blogs, IDbContextFactory<AppDbContext> dbf) =>
+        admin.MapGet("", async (HttpContext http, ContentService content, ThemeService themes, BlogService blogs, IDbContextFactory<AppDbContext> dbf,
+            Homepage.Analytics.AnalyticsQueries analytics, Homepage.Analytics.AnalyticsCollector collector, TimeProvider time) =>
         {
             var a = AdminContext.Get(http);
+            long? visitorsToday = null;
+            if (a.Perms.HasSystem(SystemGroups.Analytics, Perm.Ro))
+            {
+                var tz = (await collector.SettingsAsync()).Zone;
+                visitorsToday = (await analytics.SummaryAsync(Homepage.Analytics.AnalyticsRange.Resolve("today", null, null, tz, time.GetUtcNow().UtcDateTime),
+                    new Dictionary<string, string>())).Visitors;
+            }
             var (pages, posts, drafts) = await content.CountsAsync(a.Perms);
             var recent = await content.ListAsync(a.Perms, new ContentQuery(PageSize: 10));
             await using var db = await dbf.CreateDbContextAsync();
@@ -140,7 +148,7 @@ public static class AdminEndpoints
             var site = await SiteSettings.LoadAsync(db);
             return Html.Render<DashboardPage>(new
             {
-                Pages = pages, Posts = posts, Drafts = drafts,
+                Pages = pages, Posts = posts, Drafts = drafts, VisitorsToday = visitorsToday,
                 ThemeName = (await themes.GetActiveAsync()).Name,
                 Recent = recent.Items,
                 GroupNames = groups.Where(g => a.Perms.Has(g.Id, Perm.Ro)).ToDictionary(g => g.Id, g => g.Name),
@@ -636,10 +644,112 @@ public static class AdminEndpoints
             return FlashCookie.Redirect(http, "/admin/blogs", "Blog deleted.");
         });
 
+        MapAnalytics(admin);
         MapProfile(admin);
         MapAccess(admin);
         MapSettings(admin);
     }
+
+    // ---------------------------------------------------------------- analytics (analytics: ro to view, rw for settings)
+    private static void MapAnalytics(RouteGroupBuilder admin)
+    {
+        static void RequireAnalytics(HttpContext http, Perm perm)
+        {
+            if (!AdminContext.Get(http).Perms.HasSystem(SystemGroups.Analytics, perm))
+                throw new AccessDeniedException(perm == Perm.Ro ? "Analytics needs analytics: ro." : "Changing analytics needs analytics: rw.");
+        }
+
+        admin.MapGet("/analytics", async (HttpContext http, HttpRequest req, Homepage.Analytics.AnalyticsQueries queries,
+            Homepage.Analytics.AnalyticsCollector collector, Homepage.Analytics.CountryLookup geo, TimeProvider time, CancellationToken ct) =>
+        {
+            RequireAnalytics(http, Perm.Ro);
+            var (message, error) = FlashCookie.Take(http);
+            var settings = await collector.SettingsAsync(ct);
+            var url = AnalyticsUrl.Parse(req);
+            var now = time.GetUtcNow().UtcDateTime;
+            var range = Homepage.Analytics.AnalyticsRange.Resolve(url.RangeKey, url.From, url.To, settings.Zone, now);
+            var f = url.Filters;
+            var breakdowns = new Dictionary<string, List<Homepage.Analytics.AnalyticsRow>>();
+            foreach (var dim in new[] { "page", "entry", "source", "channel", "utm_campaign", "country", "device", "browser", "os" })
+                breakdowns[dim] = await queries.BreakdownAsync(dim, range, f, 10, ct);
+            return Html.Render<AnalyticsPage>(new
+            {
+                Range = range, Url = url,
+                Summary = await queries.SummaryAsync(range, f, ct),
+                Previous = await queries.SummaryAsync(range.Previous(settings.Zone, now), f, ct),
+                Points = await queries.TimeseriesAsync(range, f, settings.TimeZone, ct),
+                Breakdowns = breakdowns,
+                RealtimeVisitors = (await queries.RealtimeAsync(now, ct)).Visitors,
+                Settings = settings,
+                CanManage = AdminContext.Get(http).Perms.HasSystem(SystemGroups.Analytics, Perm.Rw),
+                StoredTotal = await queries.CountAllAsync(ct),
+                GeoDate = geo.DatabaseDateUtc, OwnGeoFile = geo.UsesOwnFile,
+                TimeZones = TimeZoneInfo.GetSystemTimeZones().Select(z => z.Id).Where(id => id.Contains('/') || id == "UTC").Order().ToList(),
+                Message = message, Error = error,
+            });
+        });
+
+        admin.MapGet("/analytics/realtime", async (HttpContext http, Homepage.Analytics.AnalyticsQueries queries, TimeProvider time, CancellationToken ct) =>
+        {
+            RequireAnalytics(http, Perm.Ro);
+            return Html.Render<AnalyticsRealtime>(new { Visitors = (await queries.RealtimeAsync(time.GetUtcNow().UtcDateTime, ct)).Visitors });
+        });
+
+        admin.MapGet("/analytics/export", async (HttpContext http, HttpRequest req, string dim, Homepage.Analytics.AnalyticsQueries queries,
+            Homepage.Analytics.AnalyticsCollector collector, TimeProvider time, CancellationToken ct) =>
+        {
+            RequireAnalytics(http, Perm.Ro);
+            if (!Homepage.Analytics.AnalyticsQueries.Dimensions.ContainsKey(dim)) return Results.BadRequest();
+            var settings = await collector.SettingsAsync(ct);
+            var url = AnalyticsUrl.Parse(req);
+            var range = Homepage.Analytics.AnalyticsRange.Resolve(url.RangeKey, url.From, url.To, settings.Zone, time.GetUtcNow().UtcDateTime);
+            var rows = await queries.BreakdownAsync(dim, range, url.Filters, 1000, ct);
+            var sb = new System.Text.StringBuilder($"{dim},visitors,pageviews\n");
+            foreach (var r in rows) sb.Append(Csv(AnalyticsFormat.Label(dim, r.Value))).Append(',').Append(r.Visitors).Append(',').Append(r.Pageviews).Append('\n');
+            return Results.File(System.Text.Encoding.UTF8.GetBytes(sb.ToString()), "text/csv; charset=utf-8",
+                $"analytics-{dim}-{range.FromLocal:yyyy-MM-dd}-{range.ToLocal.AddDays(-1):yyyy-MM-dd}.csv");
+        });
+
+        admin.MapPost("/analytics/settings", async (HttpContext http, IDbContextFactory<AppDbContext> dbf, Homepage.Analytics.AnalyticsCollector collector,
+            IOutputCacheStore cache, IAuditLog audit, [FromForm] bool? enabled, [FromForm] bool? countries, [FromForm] int? retentionDays,
+            [FromForm] string? timeZone) =>
+        {
+            RequireAnalytics(http, Perm.Rw);
+            var tz = (timeZone ?? "").Trim();
+            if (Homepage.Analytics.AnalyticsSettings.TryTimeZone(tz) is null)
+                return FlashCookie.Redirect(http, "/admin/analytics", $"'{tz}' is not a time zone this server knows (use an IANA name such as Europe/Warsaw).", error: true);
+            var days = Math.Clamp(retentionDays ?? 730, Homepage.Analytics.AnalyticsSettings.MinRetentionDays, Homepage.Analytics.AnalyticsSettings.MaxRetentionDays);
+            await using (var db = await dbf.CreateDbContextAsync())
+            {
+                try { await db.Database.SqlQuery<DateTime>($"SELECT (now() AT TIME ZONE {tz}) AS \"Value\"").ToListAsync(); }
+                catch (Npgsql.PostgresException) { return FlashCookie.Redirect(http, "/admin/analytics", $"PostgreSQL does not know the time zone '{tz}'.", error: true); }
+                await SiteSettings.SetAsync(db, Homepage.Analytics.AnalyticsSettings.EnabledKey, enabled == true ? "true" : "false");
+                await SiteSettings.SetAsync(db, Homepage.Analytics.AnalyticsSettings.CountriesKey, countries == true ? "true" : "false");
+                await SiteSettings.SetAsync(db, Homepage.Analytics.AnalyticsSettings.RetentionKey, days.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                await SiteSettings.SetAsync(db, Homepage.Analytics.AnalyticsSettings.TimeZoneKey, tz);
+                await db.SaveChangesAsync();
+            }
+            collector.ForgetSettings();
+            await cache.EvictByTagAsync(SiteEndpoints.CacheTag, default); // pages include the script only when counting is on
+            await audit.WriteAsync(AdminContext.Get(http).Actor, "analytics.settings", "Settings", "analytics",
+                $"counting {(enabled == true ? "on" : "off")}, countries {(countries == true ? "on" : "off")}, keep {days} days, {tz}");
+            return FlashCookie.Redirect(http, "/admin/analytics", "Saved.");
+        });
+
+        admin.MapPost("/analytics/delete", async (HttpContext http, Homepage.Analytics.AnalyticsQueries queries, IAuditLog audit) =>
+        {
+            RequireAnalytics(http, Perm.Rw);
+            var n = await queries.CountAllAsync();
+            await queries.DeleteAllAsync();
+            await audit.WriteAsync(AdminContext.Get(http).Actor, "analytics.delete", "Settings", "analytics", $"{n} page views");
+            return FlashCookie.Redirect(http, "/admin/analytics", "All analytics data was deleted.");
+        });
+    }
+
+    private static string Csv(string s) =>
+        s.IndexOfAny([',', '"', '\n', '\r']) >= 0 || s.StartsWith('=') || s.StartsWith('+') || s.StartsWith('-') || s.StartsWith('@')
+            ? "\"" + (s.StartsWith('=') || s.StartsWith('+') || s.StartsWith('-') || s.StartsWith('@') ? "'" : "") + s.Replace("\"", "\"\"") + "\""
+            : s;
 
     // ---------------------------------------------------------------- the signed-in user's own profile
     private static void MapProfile(RouteGroupBuilder admin)

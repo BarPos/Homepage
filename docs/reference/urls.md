@@ -19,6 +19,7 @@ nav_order: 2
 | `/feed.xml` | RSS 2.0 of the 20 latest posts of all blogs | yes |
 | `/sitemap.xml` | Every blog, published page and post | yes |
 | `/robots.txt` | Disallows `/admin/`, points at the sitemap | yes |
+| `/hp/event` (POST) | Page views and engagement time from the analytics script (JSON, at most 4 KB; only from this site's pages; `204`, or `429` above 120 per minute per network) | no |
 | `/media/<file>` | An uploaded file, one-year immutable cache | browser |
 | `/theme/<id>/<version>.css` | The CSS variables of a theme version, one-year immutable cache | browser |
 | `/_content/Homepage.Web/…` | Static files: `site.css`, scripts, libraries (versioned with `?v=`) | browser |
@@ -55,3 +56,4 @@ All under `/admin`, signed in (except `login`), never cached. POST requests need
 | `/admin/updates/apply` (POST) | Stage an update; with `Accept: application/json` answers `{"ok":true,"from":…,"to":…}` or `{"error":…}` |
 | `/admin/updates/status` | `{"version":…,"run":{"state","from","to","message","finishedAt"}}`, polled by the progress dialog |
 | `/admin/audit?q=&area=&from=&to=` | Audit log (`q` also matches IP addresses) |
+| `/admin/analytics?range=&from=&to=&page=&entry=&source=&channel=&referrer=&utm_source=&utm_medium=&utm_campaign=&country=&device=&browser=&os=` | Analytics (`range`: `today`, `yesterday`, `7d`, `30d`, `month`, `lastmonth`, `12mo`, `custom` with `from`/`to` as `yyyy-MM-dd`; a filter value `(none)` means empty). `/realtime`, `/export?dim=…` (CSV), `/settings` and `/delete` (POST) |

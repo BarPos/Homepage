@@ -11,6 +11,7 @@
         <a class="stat" href="/admin/content?type=page"><span class="muted">Pages</span><strong>@Pages</strong></a>
         <a class="stat" href="/admin/content?type=post"><span class="muted">Posts</span><strong>@Posts</strong></a>
         <div class="stat"><span class="muted">Drafts</span><strong>@Drafts</strong></div>
+        @if (VisitorsToday is { } v) { <a class="stat" href="/admin/analytics?range=today"><span class="muted">Visitors today</span><strong>@AnalyticsFormat.Number(v)</strong></a> }
         <a class="stat" href="/admin/themes"><span class="muted">Active theme</span><strong class="stat-text">@ThemeName</strong></a>
     </div>
     @if (CreateGroups.Count > 0) { <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" Blogs="Blogs" /> }
@@ -33,4 +34,6 @@
     [Parameter] public Dictionary<int, string> GroupNames { get; set; } = [];
     [Parameter] public List<Group> CreateGroups { get; set; } = [];
     [Parameter] public int? DefaultGroupId { get; set; }
+    /// <summary>Null when the user cannot see analytics.</summary>
+    [Parameter] public long? VisitorsToday { get; set; }
 }

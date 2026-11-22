@@ -55,6 +55,7 @@ phone.
 | **Users & permissions** | Users, Groups, Roles (each a list with **Add account** / **New group** / **New role** and an editor page), and the three relation screens (needs `admin: rw`, see [Permissions](../permissions.md)) |
 | **Your profile** | Your display name, email, password and two-factor sign-in (every user) |
 | **Settings** | Site title, tagline, logo, favicon, public address, home page, default group; version and updates (needs `admin: rw`) |
+| **Analytics** | Visitors, visits, page views, sources, countries and devices of the public site (see [Analytics](analytics.md), needs `analytics: ro`) |
 | **Audit log** | Who signed in, created, published, deleted, published themes, changed menus, settings, accounts and permissions, and from which address. Each entry has the request's IP, and *signed in from* when the user's session started at another address. Drafts (content autosave, theme drafts) are not logged; publishing is (needs `audit: ro`) |
 
 ## Lists
@@ -86,7 +87,7 @@ URL, so a view can be bookmarked or shared. The relation screens under **Users &
   - **Pages and blogs share the first part of the address**: a page cannot take a blog's address and the other way
     round. A page titled like a blog gets a number (`/releases-2`).
   - A few addresses belong to the site itself: `admin`, `search`, `media`, `theme`, `healthz`, `content`,
-    `feed-xml`, `sitemap-xml`, `robots-txt`.
+    `feed-xml`, `sitemap-xml`, `robots-txt`, `hp`.
   - A post's address only has to be unique within its blog.
 
 ## The home page

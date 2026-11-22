@@ -1,0 +1,33 @@
+@* One breakdown (top pages, sources, …): bars proportional to visitors; a row adds a filter. *@
+<div class="an-list">
+    @if (Rows.Count == 0)
+    {
+        <p class="muted an-empty">No data for this period.</p>
+    }
+    else
+    {
+        <div class="an-row an-head muted small"><span>@Heading</span><span>Visitors</span><span>%</span></div>
+        var top = Math.Max(1, Rows.Max(r => r.Visitors));
+        foreach (var r in Rows)
+        {
+            var value = r.Value ?? Homepage.Analytics.AnalyticsQueries.None;
+            <a class="an-row" href="@Url.Link(addKey: Dimension, addValue: value)" title="Show only @AnalyticsFormat.Label(Dimension, r.Value)">
+                <span class="an-bar" style="width:@((100.0 * r.Visitors / top).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></span>
+                <span class="an-label">
+                    @if (Dimension == "country") { <span class="flag" aria-hidden="true">@AnalyticsFormat.Flag(r.Value)</span> }
+                    @AnalyticsFormat.Label(Dimension, r.Value)
+                </span>
+                <span class="an-num" title="@r.Pageviews page views">@AnalyticsFormat.Number(r.Visitors)</span>
+                <span class="an-pct muted">@(Total == 0 ? "" : AnalyticsFormat.Percent((double)r.Visitors / Total))</span>
+            </a>
+        }
+        <div class="an-foot"><a class="small" href="@Url.Link("/admin/analytics/export", keepCustom: true)&amp;dim=@Dimension">Export CSV</a></div>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public string Dimension { get; set; } = "";
+    [Parameter] public string Heading { get; set; } = "";
+    [Parameter] public IReadOnlyList<Homepage.Analytics.AnalyticsRow> Rows { get; set; } = [];
+    [Parameter] public long Total { get; set; }
+    [Parameter, EditorRequired] public AnalyticsUrl Url { get; set; } = default!;
+}

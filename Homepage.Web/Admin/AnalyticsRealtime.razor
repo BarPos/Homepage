@@ -1,0 +1,4 @@
+<span class="an-live" title="Visitors in the last 5 minutes"><span class="dot" aria-hidden="true"></span>@Visitors @(Visitors == 1 ? "visitor" : "visitors") now</span>
+@code {
+    [Parameter] public long Visitors { get; set; }
+}

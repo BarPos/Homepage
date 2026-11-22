@@ -1,0 +1,189 @@
+@using Homepage.Analytics
+<AdminShell Title="Analytics" Section="analytics" Subtitle="@Subtitle">
+    <Actions>
+        <span hx-get="/admin/analytics/realtime" hx-trigger="every 30s" hx-swap="innerHTML">
+            <AnalyticsRealtime Visitors="RealtimeVisitors" />
+        </span>
+        <form method="get" action="/admin/analytics" class="an-range">
+            @foreach (var (k, v) in Url.Filters) { <input type="hidden" name="@k" value="@v" /> }
+            <select name="range" data-autosubmit aria-label="Period">
+                @foreach (var (key, label) in AnalyticsRange.Presets) { <option value="@key" selected="@(Range.Key == key)">@label</option> }
+                <option value="custom" selected="@(Range.Key == "custom")">Custom…</option>
+            </select>
+        </form>
+    </Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    @if (!Settings.Enabled) { <div class="inline-alert">Analytics is off: no visits are counted. Turn it on under Settings below.</div> }
+
+    @if (Range.Key == "custom" || Url.RangeKey == "custom")
+    {
+        <form method="get" action="/admin/analytics" class="card an-custom">
+            <input type="hidden" name="range" value="custom" />
+            @foreach (var (k, v) in Url.Filters) { <input type="hidden" name="@k" value="@v" /> }
+            <label for="af">From</label><input id="af" type="date" name="from" value="@Range.FromLocal.ToString("yyyy-MM-dd")" />
+            <label for="at">To</label><input id="at" type="date" name="to" value="@Range.ToLocal.AddDays(-1).ToString("yyyy-MM-dd")" />
+            <button class="btn-primary">Show</button>
+        </form>
+    }
+
+    @if (Url.Filters.Count > 0)
+    {
+        <div class="an-filters">
+            <span class="muted small">Showing only</span>
+            @foreach (var (k, v) in Url.Filters)
+            {
+                <a class="an-chip" href="@Url.Link(removeKey: k)" title="Remove this filter">
+                    <span class="muted">@FilterName(k)</span> @AnalyticsFormat.Label(k, v == AnalyticsQueries.None ? null : v) <span aria-hidden="true">✕</span>
+                </a>
+            }
+            <a class="small" href="@(new AnalyticsUrl { RangeKey = Url.RangeKey, From = Url.From, To = Url.To }.Link())">Clear all</a>
+        </div>
+    }
+
+    @if (StoredTotal == 0)
+    {
+        <div class="card empty-state">
+            <h2>No visits counted yet</h2>
+            <p class="muted">Public pages count visits from now on. Open your site in another browser to see the first one here.</p>
+        </div>
+    }
+
+    <div class="an-kpis">
+        <Kpi Label="Unique visitors" Value="@AnalyticsFormat.Number(Summary.Visitors)" Change="AnalyticsFormat.Change(Summary.Visitors, Previous.Visitors)" Help="Different people (counted per day)" />
+        <Kpi Label="Visits" Value="@AnalyticsFormat.Number(Summary.Visits)" Change="AnalyticsFormat.Change(Summary.Visits, Previous.Visits)" Help="Page views less than 30 minutes apart are one visit" />
+        <Kpi Label="Page views" Value="@AnalyticsFormat.Number(Summary.Pageviews)" Change="AnalyticsFormat.Change(Summary.Pageviews, Previous.Pageviews)" />
+        <Kpi Label="Views per visit" Value="@Summary.ViewsPerVisit.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)" Change="AnalyticsFormat.Change(Summary.ViewsPerVisit, Previous.ViewsPerVisit)" />
+        <Kpi Label="Bounce rate" Value="@AnalyticsFormat.Percent(Summary.BounceRate)" Change="AnalyticsFormat.Change(Summary.BounceRate, Previous.BounceRate)" LowerIsBetter="true" Help="Visits that saw one page" />
+        <Kpi Label="Visit duration" Value="@AnalyticsFormat.Duration(Summary.VisitSeconds)" Change="AnalyticsFormat.Change(Summary.VisitSeconds, Previous.VisitSeconds)" Help="Average time on the site per visit" />
+    </div>
+
+    <section class="card an-chart-card">
+        <div class="an-legend small"><span class="key key-vis"></span> Visitors <span class="key key-pv"></span> Page views</div>
+        <AnalyticsChart Points="Points" Unit="@Range.Unit" />
+    </section>
+
+    <div class="an-grid">
+        <section class="card an-card" x-data="{ tab: 'page' }">
+            <div class="an-card-head">
+                <h2 class="card-title">Pages</h2>
+                <div class="an-tabs" role="tablist">
+                    <button type="button" x-bind:class="tab === 'page' && 'on'" x-on:click="tab = 'page'">Top pages</button>
+                    <button type="button" x-bind:class="tab === 'entry' && 'on'" x-on:click="tab = 'entry'">Entry pages</button>
+                </div>
+            </div>
+            <div x-show="tab === 'page'"><AnalyticsList Dimension="page" Heading="Page" Rows="@Rows("page")" Total="Summary.Visitors" Url="Url" /></div>
+            <div x-show="tab === 'entry'" x-cloak><AnalyticsList Dimension="entry" Heading="Entry page" Rows="@Rows("entry")" Total="Summary.Visitors" Url="Url" /></div>
+        </section>
+        <section class="card an-card" x-data="{ tab: 'source' }">
+            <div class="an-card-head">
+                <h2 class="card-title">Sources</h2>
+                <div class="an-tabs" role="tablist">
+                    <button type="button" x-bind:class="tab === 'source' && 'on'" x-on:click="tab = 'source'">Sources</button>
+                    <button type="button" x-bind:class="tab === 'channel' && 'on'" x-on:click="tab = 'channel'">Channels</button>
+                    <button type="button" x-bind:class="tab === 'utm_campaign' && 'on'" x-on:click="tab = 'utm_campaign'">Campaigns</button>
+                </div>
+            </div>
+            <div x-show="tab === 'source'"><AnalyticsList Dimension="source" Heading="Source" Rows="@Rows("source")" Total="Summary.Visitors" Url="Url" /></div>
+            <div x-show="tab === 'channel'" x-cloak><AnalyticsList Dimension="channel" Heading="Channel" Rows="@Rows("channel")" Total="Summary.Visitors" Url="Url" /></div>
+            <div x-show="tab === 'utm_campaign'" x-cloak><AnalyticsList Dimension="utm_campaign" Heading="utm_campaign" Rows="@Rows("utm_campaign")" Total="Summary.Visitors" Url="Url" /></div>
+        </section>
+        <section class="card an-card">
+            <div class="an-card-head"><h2 class="card-title">Countries</h2></div>
+            <AnalyticsList Dimension="country" Heading="Country" Rows="@Rows("country")" Total="Summary.Visitors" Url="Url" />
+            @if (!Settings.Countries) { <p class="help">Country lookup is off (Settings below).</p> }
+            else if (GeoDate is null) { <p class="help">The country database is not there yet; it is downloaded shortly after country lookup is turned on.</p> }
+        </section>
+        <section class="card an-card" x-data="{ tab: 'device' }">
+            <div class="an-card-head">
+                <h2 class="card-title">Devices</h2>
+                <div class="an-tabs" role="tablist">
+                    <button type="button" x-bind:class="tab === 'device' && 'on'" x-on:click="tab = 'device'">Screen</button>
+                    <button type="button" x-bind:class="tab === 'browser' && 'on'" x-on:click="tab = 'browser'">Browser</button>
+                    <button type="button" x-bind:class="tab === 'os' && 'on'" x-on:click="tab = 'os'">System</button>
+                </div>
+            </div>
+            <div x-show="tab === 'device'"><AnalyticsList Dimension="device" Heading="Screen" Rows="@Rows("device")" Total="Summary.Visitors" Url="Url" /></div>
+            <div x-show="tab === 'browser'" x-cloak><AnalyticsList Dimension="browser" Heading="Browser" Rows="@Rows("browser")" Total="Summary.Visitors" Url="Url" /></div>
+            <div x-show="tab === 'os'" x-cloak><AnalyticsList Dimension="os" Heading="Operating system" Rows="@Rows("os")" Total="Summary.Visitors" Url="Url" /></div>
+        </section>
+    </div>
+
+    <div class="an-grid">
+        <section class="card">
+            <h2 class="card-title">Your own visits</h2>
+            <p class="muted">Visits from this browser are <strong data-hp-ignore-state>counted</strong>. Turn this off on each browser you use to look at your site.</p>
+            <button type="button" data-hp-ignore-toggle>Don't count my visits</button>
+        </section>
+        @if (CanManage)
+        {
+            <section class="card">
+                <h2 class="card-title">Settings</h2>
+                <form method="post" action="/admin/analytics/settings">
+                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                    <div><label class="inline check"><input type="checkbox" name="enabled" value="true" checked="@Settings.Enabled" /> Count visits</label></div>
+                    <div><label class="inline check"><input type="checkbox" name="countries" value="true" checked="@Settings.Countries" /> Look up countries</label></div>
+                    <div class="help">@GeoNote</div>
+                    <label for="ar">Keep visits for (days)</label>
+                    <input id="ar" name="retentionDays" type="number" min="@AnalyticsSettings.MinRetentionDays" max="@AnalyticsSettings.MaxRetentionDays" value="@Settings.RetentionDays" style="max-width:140px" />
+                    <label for="atz">Time zone</label>
+                    <input id="atz" name="timeZone" type="text" list="tz-list" value="@Settings.TimeZone" maxlength="64" style="max-width:280px" />
+                    <datalist id="tz-list">@foreach (var z in TimeZones) { <option value="@z"></option> }</datalist>
+                    <div class="help">Days and hours in the reports start in this zone (IANA name, e.g. Europe/Warsaw).</div>
+                    <div class="form-actions"><button class="btn-primary">Save</button></div>
+                </form>
+                <details class="danger-zone">
+                    <summary>Delete all analytics data</summary>
+                    <p class="muted small">@AnalyticsFormat.Number(StoredTotal) stored page views.</p>
+                    <form method="post" action="/admin/analytics/delete" data-confirm="Every counted visit is deleted. This cannot be undone." data-confirm-title="Delete all analytics data?" data-confirm-button="Delete everything" data-confirm-danger>
+                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                        <button class="btn-danger">Delete all analytics data</button>
+                    </form>
+                </details>
+            </section>
+        }
+    </div>
+    <p class="muted small an-note">No cookies and no personal data: a visitor is a hash of address and browser with a salt that changes daily and is then deleted.
+        Bots and visits without JavaScript are not counted. @if (Settings.Countries) { <span>IP to country by <a href="https://db-ip.com" rel="noopener" target="_blank">DB-IP</a> (CC BY 4.0).</span> }</p>
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public AnalyticsRange Range { get; set; } = default!;
+    [Parameter, EditorRequired] public AnalyticsUrl Url { get; set; } = default!;
+    [Parameter, EditorRequired] public AnalyticsSummary Summary { get; set; } = default!;
+    [Parameter, EditorRequired] public AnalyticsSummary Previous { get; set; } = default!;
+    [Parameter] public IReadOnlyList<AnalyticsPoint> Points { get; set; } = [];
+    [Parameter] public Dictionary<string, List<AnalyticsRow>> Breakdowns { get; set; } = [];
+    [Parameter] public long RealtimeVisitors { get; set; }
+    [Parameter, EditorRequired] public AnalyticsSettings Settings { get; set; } = default!;
+    [Parameter] public bool CanManage { get; set; }
+    [Parameter] public long StoredTotal { get; set; }
+    [Parameter] public DateTime? GeoDate { get; set; }
+    [Parameter] public bool OwnGeoFile { get; set; }
+    [Parameter] public IReadOnlyList<string> TimeZones { get; set; } = [];
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    private List<AnalyticsRow> Rows(string dim) => Breakdowns.GetValueOrDefault(dim) ?? [];
+    private string Subtitle
+    {
+        get
+        {
+            var last = Range.ToLocal.AddDays(-1);
+            var dates = last.Date == Range.FromLocal.Date ? $"{Range.FromLocal:d MMM yyyy}" : $"{Range.FromLocal:d MMM yyyy} – {last:d MMM yyyy}";
+            return $"{Range.Label} · {dates} · {Settings.TimeZone}";
+        }
+    }
+    private string GeoNote => OwnGeoFile ? $"Uses the country database set in Analytics:GeoDatabase{(GeoDate is { } d ? $" ({d:yyyy-MM-dd})" : " (file not found)")}."
+        : GeoDate is { } g ? $"Free DB-IP country database, updated monthly (last {g:yyyy-MM-dd}). Addresses are looked up on this server; nothing is sent anywhere."
+        : "Downloads the free DB-IP country database (about 8 MB, monthly). Addresses are looked up on this server; nothing is sent anywhere.";
+
+    private static string FilterName(string key) => key switch
+    {
+        "page" => "Page", "entry" => "Entry page", "source" => "Source", "channel" => "Channel", "referrer" => "Referrer",
+        "utm_source" => "utm_source", "utm_medium" => "utm_medium", "utm_campaign" => "Campaign", "country" => "Country",
+        "device" => "Screen", "browser" => "Browser", "os" => "System", _ => key,
+    };
+}

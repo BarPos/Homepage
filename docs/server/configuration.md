@@ -54,7 +54,7 @@ without a proxy, sign-in works but the password and cookie travel unencrypted: u
 
 | Key | Default | |
 |---|---|---|
-| `Data` | `/opt/homepage/data` | Media uploads (`media/`), Data Protection keys (`keys/`), staged updates (`updates/`). The only folder the service may write. |
+| `Data` | `/opt/homepage/data` | Media uploads (`media/`), Data Protection keys (`keys/`), staged updates (`updates/`), the country database (`geo/`). The only folder the service may write. |
 | `Backups` | `/opt/homepage/backups` | Database dumps taken by `update.sh` and archives from `backup.sh` (root only) |
 
 Relative paths are resolved against the program folder.
@@ -63,10 +63,19 @@ Relative paths are resolved against the program folder.
 
 | Key | Default | |
 |---|---|---|
-| `GitHubRepository` | `BarPos/Homepage` | `owner/name` of the release repository. **Blank = updates off and no network calls at all.** |
+| `GitHubRepository` | `BarPos/Homepage` | `owner/name` of the release repository. **Blank = updates off** (the country database download is separate: turn off *Look up countries* in Analytics for no network calls at all). |
 | `Channel` | `stable` | `stable` = latest release; `prerelease` = newest release including prereleases |
 | `CheckIntervalHours` | `24` | Release check interval |
 | `GitHubToken` | — | Only for a private repository |
+
+## Analytics
+
+| Key | Default | |
+|---|---|---|
+| `GeoDatabase` | — | A country database in MaxMind DB format (`GeoLite2-Country.mmdb`, `dbip-country-lite.mmdb`, …) that you keep up to date. Empty: Homepage downloads the free DB-IP country database to `data/geo/` monthly while country lookup is on. |
+
+The other analytics settings (on or off, country lookup, how long to keep visits, time zone) are in the admin
+(see [Analytics](../admin/analytics.md)).
 
 ## Logging
 

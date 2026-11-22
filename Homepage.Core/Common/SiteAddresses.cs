@@ -10,7 +10,7 @@ namespace Homepage.Common;
 public static class SiteAddresses
 {
     public static readonly IReadOnlySet<string> Reserved = new HashSet<string>(StringComparer.Ordinal)
-        { "admin", "search", "media", "theme", "healthz", "feed-xml", "sitemap-xml", "robots-txt", "content" };
+        { "admin", "search", "media", "theme", "healthz", "feed-xml", "sitemap-xml", "robots-txt", "content", "hp" };
 
     /// <summary>Null when <paramref name="slug"/> is free for a page or blog, else the reason.</summary>
     public static async Task<string?> WhyTakenAsync(AppDbContext db, string slug, int? exceptPageId = null, int? exceptBlogId = null,

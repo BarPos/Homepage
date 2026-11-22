@@ -32,6 +32,9 @@ decide who may change what. It runs on one Ubuntu server with PostgreSQL, withou
   - System groups decide who may change themes, layout, raw HTML, users and settings.
 - **Public site:** any number of blogs at addresses you choose (`/blog`, `/releases`, …), each with its own RSS feed;
   search, sitemap, canonical links, a logo and favicon, output caching, and no JavaScript framework.
+- **Analytics:** visitors, visits, page views, bounce rate and visit duration; top and entry pages, sources,
+  channels and campaigns, countries, screens, browsers and systems, with filters and CSV export. No cookies, no
+  personal data, nothing sent to another company (see [Analytics](admin/analytics.md)).
 - **Operations:**
   - One-command backup and restore of the database, configuration, media and program.
   - Can share the machine's PostgreSQL with other applications: install, backups, restores and uninstall touch only

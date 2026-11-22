@@ -78,6 +78,17 @@ nav_order: 7
   'unsafe-inline'; sandbox`, so even a disguised file cannot run script in the site's origin.
 - 20 MiB per file.
 
+## Analytics and privacy
+
+- Visits are counted **without cookies** and without storing addresses: a visitor is an HMAC-SHA-256 of address,
+  browser and site with a random salt that changes daily and is deleted the day after (see
+  [Analytics](admin/analytics.md#how-visitors-are-counted)). Country lookup uses a database on the server.
+- `/hp/event` takes only small JSON messages (4 KB) from pages of the same host (`Origin`/`Referer`), is rate limited
+  per network, drops bots, admin paths and anything malformed, and queues hits in memory (a full queue drops them,
+  so a flood cannot slow the site). Like any analytics, someone can still send made-up page views.
+- Reports and CSV exports need `analytics: ro`; dimensions and filters come from a fixed list, never from SQL text.
+  Exported values that start with `=`, `+`, `-` or `@` are quoted so spreadsheets do not run them as formulas.
+
 ## Browser headers
 
 | Header | Public site | Admin |

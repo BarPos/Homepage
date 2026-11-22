@@ -80,6 +80,22 @@
   });
   document.addEventListener("hp-flash", (e) => hpFlash(e.detail.value || e.detail.message, e.detail.kind));
 
+  // Analytics: "Don't count my visits" sets a flag the public tracking script reads (same origin, this browser only).
+  const ignoreButtons = document.querySelectorAll("[data-hp-ignore-toggle]");
+  if (ignoreButtons.length) {
+    const read = () => { try { return localStorage.getItem("hp_analytics_ignore") === "1"; } catch (e) { return false; } };
+    const show = () => {
+      const on = read();
+      document.querySelectorAll("[data-hp-ignore-state]").forEach((el) => { el.textContent = on ? "not counted" : "counted"; });
+      ignoreButtons.forEach((b) => { b.textContent = on ? "Count my visits again" : "Don't count my visits"; });
+    };
+    ignoreButtons.forEach((b) => b.addEventListener("click", () => {
+      try { if (read()) localStorage.removeItem("hp_analytics_ignore"); else localStorage.setItem("hp_analytics_ignore", "1"); } catch (e) { hpFlash("This browser blocks local storage.", "error"); }
+      show();
+    }));
+    show();
+  }
+
   // In-page dialogs: <button data-open-dialog="id" data-dialog-type="Post">; [data-close-dialog] or Esc or the backdrop close.
   document.addEventListener("click", (e) => {
     const opener = e.target.closest && e.target.closest("[data-open-dialog]");

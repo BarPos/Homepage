@@ -36,6 +36,10 @@
                     <a href="/admin/users" class="@Active("access")">Users &amp; permissions</a>
                     <a href="/admin/settings" class="@Active("settings")">Settings</a>
                 }
+                @if (P.HasSystem(SystemGroups.Analytics, Perm.Ro))
+                {
+                    <a href="/admin/analytics" class="@Active("analytics")">Analytics</a>
+                }
                 @if (P.HasSystem(SystemGroups.Audit, Perm.Ro))
                 {
                     <a href="/admin/audit" class="@Active("audit")">Audit log</a>

@@ -61,6 +61,7 @@ never used for content.
 | `html` | — | Use the raw HTML block |
 | `forms` | — | Reserved for form submissions (not built yet) |
 | `audit` | Read the audit log | — |
+| `analytics` | See visitor statistics | Change analytics settings, delete the data |
 
 ## Defaults
 

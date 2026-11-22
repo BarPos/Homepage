@@ -55,6 +55,7 @@ public static class SystemGroups
     public const string Html = "html";
     public const string Forms = "forms";
     public const string Audit = "audit";
+    public const string Analytics = "analytics";
     /// <summary>Default content group (not a system group; it can be renamed or made invalid).</summary>
     public const string Content = "content";
 
@@ -66,5 +67,6 @@ public static class SystemGroups
         (Html, "rw: use the raw HTML block."),
         (Forms, "ro: view form submissions. rw: export and delete them."),
         (Audit, "ro: view the audit log."),
+        (Analytics, "ro: view visitor statistics. rw: change analytics settings and delete the data."),
     ];
 }

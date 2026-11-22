@@ -1,0 +1,18 @@
+<div class="an-kpi" title="@Help">
+    <span class="muted small">@Label</span>
+    <strong>@Value</strong>
+    @if (Change is { } c)
+    {
+        var good = LowerIsBetter ? c < 0 : c > 0;
+        var cls = Math.Abs(c) < 0.005 ? "flat" : good ? "up" : "down";
+        <span class="an-change @cls" title="Compared with the period before">@(c > 0 ? "↑" : c < 0 ? "↓" : "→") @AnalyticsFormat.Percent(Math.Abs(c))</span>
+    }
+    else { <span class="an-change flat">new</span> }
+</div>
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public double? Change { get; set; }
+    [Parameter] public bool LowerIsBetter { get; set; }
+    [Parameter] public string? Help { get; set; }
+}
