@@ -69,6 +69,14 @@ public enum BarJustify { Spread, Start, Center, End }
 public enum BrandDisplay { LogoAndText, LogoOnly, TextOnly }
 public enum IconPosition { BeforeText, AfterText }
 public enum Orientation { Horizontal, Vertical }
+
+/// <summary>What a menu does on small screens (below 760 px).</summary>
+public enum MobileMenu
+{
+    [Display(Name = "Fold into ☰ in a site bar (automatic)")] Auto,
+    [Display(Name = "Always fold into ☰")] Fold,
+    [Display(Name = "Keep the links")] Keep,
+}
 public enum MenuLook { Links, Pills, Underline, Buttons }
 public enum VerticalAlign { Top, Center, Bottom, Stretch }
 public enum ContentWidth { Narrow, Normal, Wide, Full }
@@ -230,5 +238,5 @@ public sealed class MenuProps
     [Display(Name = "Direction")] public Orientation Orientation { get; set; } = Orientation.Horizontal;
     [Display(Name = "Look")] public MenuLook Look { get; set; } = MenuLook.Links;
     [Display(Name = "Gap")] public Spacing Gap { get; set; } = Spacing.Sm;
-    [Display(Name = "Fold into a ☰ button on small screens")] public bool Collapse { get; set; }
+    [Display(Name = "On small screens")] public MobileMenu Mobile { get; set; } = MobileMenu.Auto;
 }

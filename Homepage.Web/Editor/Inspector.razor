@@ -38,7 +38,7 @@ else
             {
                 <label for="@id">@label</label>
                 <select id="@id" name="@name">
-                    @foreach (var v in Enum.GetValues(t)) { <option value="@v" selected="@(Equals(v, value))">@Humanize(v.ToString()!)</option> }
+                    @foreach (var v in Enum.GetValues(t)) { <option value="@v" selected="@(Equals(v, value))">@(t.GetField(v.ToString()!)?.GetCustomAttribute<DisplayAttribute>()?.Name ?? Humanize(v.ToString()!))</option> }
                 </select>
             }
             else if (p.GetCustomAttribute<ThemeColorAttribute>() is { } colorAttr)

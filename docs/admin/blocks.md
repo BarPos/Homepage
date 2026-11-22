@@ -188,7 +188,10 @@ icon and open in a new tab (set in the menu editor).
 | Direction | Horizontal (a row) or Vertical (one link per line, e.g. in a footer column) | Horizontal |
 | Look | *Links*, *Pills* (a soft background on hover), *Underline*, *Buttons* (outlined) | Links |
 | Gap | None to Xl | Sm |
-| Fold into a ☰ button on small screens | below 760 px the links are behind a menu button (no script needed) | off |
+| On small screens | below 760 px: *Fold into ☰ in a site bar* (automatic: a menu in the header's site bar becomes a menu button on phones), *Always fold into ☰*, or *Keep the links* | Fold into ☰ in a site bar |
+
+The ☰ button and its panel take the theme's colors, corners, borders and shadow, and are frosted when the theme uses
+glass. In a narrow site bar the site name shortens with "…" instead of running into the menu. No script is needed.
 
 Links to a page that is not published are left out on the site; in the editor they show with a dashed outline.
 

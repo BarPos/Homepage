@@ -62,7 +62,7 @@ public class PageUnitTests
                 [new BlockNode { Type = "column", Props = BlockOps.ToJson(new ColumnProps()), Children =
                     [new BlockNode { Type = "group", Props = BlockOps.ToJson(new GroupProps()), Children =
                         [new BlockNode { Type = "sitebrand", Props = BlockOps.ToJson(new SiteBrandProps()) },
-                         new BlockNode { Type = "menu", Props = BlockOps.ToJson(new MenuProps { Orientation = Orientation.Vertical, Collapse = true }) }] }] }] }] }] };
+                         new BlockNode { Type = "menu", Props = BlockOps.ToJson(new MenuProps { Orientation = Orientation.Vertical, Mobile = MobileMenu.Fold }) }] }] }] }] }] };
         Assert.Empty(BlockValidator.Validate(tree, TreeKind.Header));
         // an optional background color may be empty; a mandatory one may not
         Assert.Empty(BlockValidator.ValidateProps(BlockRegistry.Get("column")!, BlockOps.ToJson(new ColumnProps { Background = "" })));
@@ -505,7 +505,7 @@ public sealed class PagesHttpTests(PostgresFixture pg)
                 Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(r)).StatusCode);
             }
             var menuInGroup = await Insert("menu", groupId2);
-            await SetProps(menuInGroup, ("p.MenuKey", "main"), ("p.Orientation", "Vertical"), ("p.Look", "Pills"), ("p.Collapse", "true"));
+            await SetProps(menuInGroup, ("p.MenuKey", "main"), ("p.Orientation", "Vertical"), ("p.Look", "Pills"), ("p.Mobile", "Fold"));
             await SetProps(groupId2, ("p.Direction", "Vertical"), ("p.Justify", "Center"), ("p.Background", "surface"));
             await client.PostAsync($"/admin/content/{about}/publish", Form(("__RequestVerificationToken", token)));
             var laidOut = await client.GetStringAsync("/about");
@@ -513,6 +513,9 @@ public sealed class PagesHttpTests(PostgresFixture pg)
             Assert.Contains("bg-surface has-bg", laidOut);
             Assert.Contains("menu menu-vertical look-pills", laidOut);
             Assert.Contains("<details class=\"menu-fold\">", laidOut);
+            Assert.Contains("menu-nav menu-mobile-fold", laidOut);
+            // a menu in the theme's site bar folds into ☰ on phones by itself (the default "automatic")
+            Assert.Contains("menu-nav menu-mobile-auto", laidOut);
 
             // menus too
             await client.PostAsync("/admin/menus/footer", Form(("__RequestVerificationToken", token), ("name", "Footer menu"),

@@ -25,7 +25,10 @@ p{margin:0 0 var(--space);text-wrap:pretty}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 
 /* ---------------------------------------------------------------- backdrop (behind everything) */
-.site{position:relative;isolation:isolate;min-height:100vh;display:flex;flex-direction:column}
+/* No stacking context here (no isolation or z-index): in Chrome and Firefox one would stop the frosted glass of the
+   site bar, cards and quotes from blurring the page behind them (Safari blurs anyway). The color fields below stay
+   visible because the page background is drawn on the canvas, under them. */
+.site{position:relative;min-height:100vh;display:flex;flex-direction:column}
 .site::before,.site::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1}
 html[data-backdrop="mesh"] .site::before{
   background:
@@ -300,12 +303,44 @@ img.btn-icon{border-radius:2px}
 .look-buttons a{padding:.45em 1em;border:1px solid var(--color-border);border-radius:var(--btn-radius);background:color-mix(in srgb,var(--color-surface) 60%,transparent)}
 .look-buttons a:hover{border-color:var(--color-primary)}
 .site-bar .look-underline a{border-radius:0;padding:.25rem 0}
+/* ---- the ☰ menu on small screens: themed like the site bar (glass, or a solid card with glass off) */
 .menu-fold{display:none;position:relative}
-.menu-fold>summary{list-style:none;cursor:pointer;display:grid;place-items:center;width:2.6rem;height:2.6rem;border-radius:var(--btn-radius);
-  border:1px solid var(--color-border);background:color-mix(in srgb,var(--color-surface) 70%,transparent)}
+.menu-fold>summary{list-style:none;cursor:pointer;display:grid;place-items:center;width:2.6rem;height:2.6rem;flex:none;color:var(--color-text);
+  border-radius:var(--btn-radius);border:1px solid var(--glass-edge,var(--color-border));
+  background:color-mix(in srgb,var(--color-surface) calc(var(--glass-alpha,1) * 100%),transparent);
+  -webkit-backdrop-filter:blur(var(--glass-blur,0px));backdrop-filter:blur(var(--glass-blur,0px));
+  box-shadow:inset 0 1px 0 var(--glass-highlight,transparent);transition:background-color .15s,border-color .15s}
 .menu-fold>summary::-webkit-details-marker{display:none}
-.menu-fold>summary svg{width:1.3rem;height:1.3rem}
-.menu-fold[open]>.menu{position:absolute;right:0;top:calc(100% + .5rem);min-width:13rem;z-index:60;padding:.5rem;border-radius:var(--radius);
-  background:var(--color-surface);border:1px solid var(--color-border);box-shadow:var(--shadow)}
-.menu-fold[open]>.menu a{display:flex;padding:.55rem .75rem;border-radius:calc(var(--radius)*.6)}
-@media (max-width:760px){.menu-collapsible>.menu-fold{display:block}.menu-collapsible>.menu-wide{display:none}}
+.menu-fold>summary:hover{background:color-mix(in srgb,var(--color-text) 7%,var(--color-surface))}
+.menu-fold>summary:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
+.menu-fold>summary svg{width:1.3rem;height:1.3rem;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;overflow:visible}
+.menu-fold>summary path{transition:transform .2s ease,opacity .15s ease;transform-origin:12px 12px}
+.menu-fold[open]>summary .l1{transform:translateY(5px) rotate(45deg)}
+.menu-fold[open]>summary .l2{opacity:0}
+.menu-fold[open]>summary .l3{transform:translateY(-5px) rotate(-45deg)}
+.menu-fold[open]>summary{border-color:color-mix(in srgb,var(--color-primary) 40%,var(--color-border))}
+.menu-folded{position:absolute;right:0;top:calc(100% + .6rem);z-index:60;display:flex;flex-direction:column;gap:2px;
+  min-width:14rem;max-width:min(22rem,calc(100vw - 24px));padding:.45rem;margin:0;list-style:none;
+  border-radius:max(var(--radius),12px);border:1px solid var(--glass-edge,var(--color-border));
+  background:color-mix(in srgb,var(--color-surface) calc(max(var(--glass-alpha,1),.94) * 100%),transparent);
+  -webkit-backdrop-filter:blur(var(--glass-blur,0px)) saturate(165%);backdrop-filter:blur(var(--glass-blur,0px)) saturate(165%);
+  box-shadow:inset 0 1px 0 var(--glass-highlight,transparent),var(--shadow),0 18px 40px rgb(0 0 0/.16);
+  animation:menu-fold-in .16s ease-out;transform-origin:top right}
+.menu-folded a{display:flex;align-items:center;gap:.6em;padding:.7rem .85rem;border-radius:max(calc(var(--radius)*.6),8px);
+  color:var(--color-text);font-weight:500;text-decoration:none}
+.menu-folded a:hover,.menu-folded a:focus-visible{background:color-mix(in srgb,var(--color-text) 7%,transparent);color:var(--color-text)}
+html[data-glass="off"] .menu-fold>summary,html[data-glass="off"] .menu-folded{background:var(--color-surface);border-color:var(--color-border);
+  -webkit-backdrop-filter:none;backdrop-filter:none}
+@keyframes menu-fold-in{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.menu-folded{animation:none}.menu-fold>summary path{transition:none}}
+/* when it folds: in a site bar automatically, anywhere when set to "Always fold" */
+@media (max-width:760px){
+  .menu-mobile-fold>.menu-fold,.site-bar .menu-mobile-auto>.menu-fold{display:block}
+  .menu-mobile-fold>.menu-wide,.site-bar .menu-mobile-auto>.menu-wide{display:none}
+  .site-bar nav.menu-mobile-auto,.site-bar nav.menu-mobile-fold{overflow:visible;margin-left:auto}
+  /* the brand gives way: the name shortens with … instead of running into the menu */
+  .site-brand{flex:0 1 auto;min-width:0}
+  .site-brand-text{min-width:0;flex-wrap:nowrap}
+  .site-brand strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;min-width:0}
+  .site-logo{flex:none}
+}

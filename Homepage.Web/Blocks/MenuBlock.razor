@@ -3,16 +3,18 @@
     var p = Node.PropsAs<MenuProps>();
     var list = $"menu menu-{(p.Orientation == Orientation.Vertical ? "vertical" : "horizontal")} look-{p.Look.ToString().ToLowerInvariant()} gap-{Css.Spacing(p.Gap)} {Css.Align(p.Align)}";
 }
-<nav class="blk menu-nav @(p.Collapse ? "menu-collapsible" : null)" aria-label="Menu">
-    @if (p.Collapse)
+<nav class="blk menu-nav menu-mobile-@p.Mobile.ToString().ToLowerInvariant()" aria-label="Menu">
+    @if (p.Mobile != MobileMenu.Keep)
     {
-        @* On small screens the list folds into a ☰ button (details/summary: no script needed). *@
+        @* On small screens (in a site bar, or always) the links fold into a ☰ button: details/summary, no script. *@
         <details class="menu-fold">
-            <summary aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></summary>
-            <ul class="menu menu-vertical look-@p.Look.ToString().ToLowerInvariant() gap-@Css.Spacing(p.Gap)">@Items</ul>
+            <summary aria-label="Menu" title="Menu">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path class="l1" d="M4 7h16"/><path class="l2" d="M4 12h16"/><path class="l3" d="M4 17h16"/></svg>
+            </summary>
+            <ul class="menu menu-folded">@Items</ul>
         </details>
     }
-    <ul class="@list @(p.Collapse ? "menu-wide" : null)">@Items</ul>
+    <ul class="@list menu-wide">@Items</ul>
 </nav>
 @code {
     [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
