@@ -1,0 +1,20 @@
+<CascadingValue Value="Ctx" IsFixed="true">
+    <SiteDocument Title="Blog" UseHtmx="true">
+        <section class="sec sec-narrow pad-lg">
+            <div class="container">
+                <h1>Blog</h1>
+                <form class="search-form" action="/search" method="get" role="search">
+                    <label class="sr-only" for="q">Search</label>
+                    <input id="q" name="q" type="search" placeholder="Search…"
+                           hx-get="/search" hx-trigger="input changed delay:300ms" hx-target="#post-list" hx-select="#post-list" hx-swap="outerHTML" />
+                </form>
+                <PostListFragment Posts="Posts" NextSkip="NextSkip" />
+            </div>
+        </section>
+    </SiteDocument>
+</CascadingValue>
+@code {
+    [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
+    [Parameter, EditorRequired] public List<ContentItem> Posts { get; set; } = [];
+    [Parameter] public int? NextSkip { get; set; }
+}

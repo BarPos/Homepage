@@ -1,0 +1,25 @@
+<form method="post" action="/admin/content/new" class="form-row" style="grid-template-columns:2fr 1fr 1fr auto;align-items:end">
+    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+    <div><label for="nt">Title</label><input id="nt" name="title" type="text" required maxlength="300" placeholder="New page or post title" /></div>
+    <div>
+        <label for="ny">Type</label>
+        <select id="ny" name="type">
+            <option value="Page" selected="@(Type != ContentType.Post)">Page</option>
+            <option value="Post" selected="@(Type == ContentType.Post)">Blog post</option>
+        </select>
+    </div>
+    <div>
+        <label for="ng">Group</label>
+        <select id="ng" name="groupId">
+            @foreach (var g in Groups) { <option value="@g.Id" selected="@(g.Id == DefaultGroupId)">@g.Name</option> }
+        </select>
+    </div>
+    <div><button class="btn-primary" type="submit">Create and edit</button></div>
+</form>
+@code {
+    [Parameter] public List<Group> Groups { get; set; } = [];
+    [Parameter] public int? DefaultGroupId { get; set; }
+    [Parameter] public ContentType? Type { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

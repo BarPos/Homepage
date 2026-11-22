@@ -1,0 +1,29 @@
+@{ var def = BlockRegistry.Get(Node.Type); }
+<li data-id="@Node.Id" data-type="@Node.Type">
+    <div class="row"><span class="handle" aria-hidden="true">⋮⋮</span><span>@(def?.Icon ?? "?")</span><span>@Label(def)</span></div>
+    @if (def?.IsContainer == true)
+    {
+        <ul data-parent="@Node.Id">
+            @foreach (var c in Node.Children) { <LayerItem Node="c" /> }
+        </ul>
+    }
+</li>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+
+    private string Label(BlockDefinition? def)
+    {
+        var name = def?.Label ?? Node.Type + " (unsupported)";
+        var hint = Node.Type switch
+        {
+            "heading" => Node.PropsAs<HeadingProps>().Text,
+            "markdown" => Node.PropsAs<MarkdownProps>().Markdown,
+            "button" => Node.PropsAs<ButtonProps>().Text,
+            "quote" => Node.PropsAs<QuoteProps>().Text,
+            _ => null,
+        };
+        if (string.IsNullOrWhiteSpace(hint)) return name;
+        hint = hint.ReplaceLineEndings(" ");
+        return $"{name}: {(hint.Length > 24 ? hint[..24] + "…" : hint)}";
+    }
+}

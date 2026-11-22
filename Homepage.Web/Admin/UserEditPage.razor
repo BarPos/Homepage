@@ -1,0 +1,46 @@
+<AdminShell Title="@($"User: {U.UserName}")" Section="access">
+    <AccessTabs Active="users" />
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert" style="border-color:var(--ok);color:var(--ok)">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <div class="grid2">
+        <div class="card">
+            <h2 style="margin-top:0">Account</h2>
+            <form method="post" action="/admin/users/@U.Id">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <label for="dn">Display name</label>
+                <input id="dn" name="displayName" type="text" value="@U.DisplayName" maxlength="200" />
+                <label class="inline" style="margin-top:12px"><input type="checkbox" name="valid" value="true" checked="@U.Valid" /> Valid (can sign in)</label>
+                <div class="form-actions"><button class="btn-primary">Save</button></div>
+            </form>
+            <h2>Reset password</h2>
+            <form method="post" action="/admin/users/@U.Id/password">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <input name="password" type="password" required autocomplete="new-password" placeholder="New password" />
+                <div class="form-actions"><button>Set password</button></div>
+            </form>
+        </div>
+        <div class="card">
+            <h2 style="margin-top:0">Effective permissions</h2>
+            <p class="help">Union of direct grants and the user's valid roles, on valid groups. Change them under Users ↔ Groups and Users ↔ Roles.</p>
+            @if (Effective.IsAdmin) { <p><span class="badge badge-ok">admin: rw</span> full access everywhere</p> }
+            <table class="matrix">
+                <thead><tr><th>Group</th>@foreach (var (_, k) in PermNames.All) { <th>@k</th> }</tr></thead>
+                <tbody>
+                    @foreach (var g in Groups.Where(g => g.Valid))
+                    {
+                        <tr><td>@g.Name</td>@foreach (var (p, _) in PermNames.All) { <td>@(Effective.Has(g.Id, p) ? "✓" : "")</td> }</tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public User U { get; set; } = default!;
+    [Parameter] public List<Group> Groups { get; set; } = [];
+    [Parameter] public EffectivePermissions Effective { get; set; } = EffectivePermissions.Nobody;
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

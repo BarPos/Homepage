@@ -1,0 +1,103 @@
+@using System.Text.Json
+@using System.ComponentModel.DataAnnotations
+@using System.Reflection
+@{ var def = BlockRegistry.Get(Node.Type); }
+@if (def is null)
+{
+    <div class="empty">This block type is not supported by this version. It is kept but not shown on the site.</div>
+}
+else
+{
+    var model = Node.Props.Deserialize(def.PropsType, BlockTree.Json) ?? def.CreateDefaultProps();
+    <div class="toolbar" style="margin-bottom:6px">
+        <strong>@def.Icon @def.Label</strong>
+        <span class="spacer"></span>
+        @if (CanEdit)
+        {
+            <button type="button" class="btn-sm" data-op="up" title="Move up">↑</button>
+            <button type="button" class="btn-sm" data-op="down" title="Move down">↓</button>
+            <button type="button" class="btn-sm" data-op="duplicate" title="Duplicate">⧉</button>
+            <button type="button" class="btn-sm btn-danger" data-op="delete" title="Delete (Del)">✕</button>
+        }
+    </div>
+    <form hx-post="/admin/editor/@Target/props/@Node.Id" hx-trigger="input changed delay:500ms, change" hx-swap="none" data-block="@Node.Id">
+        <fieldset disabled="@(!CanEdit)" style="border:0;padding:0;margin:0">
+        @foreach (var p in def.PropsType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var name = "p." + p.Name;
+            var id = "f-" + p.Name;
+            var label = p.GetCustomAttribute<DisplayAttribute>()?.Name ?? p.Name;
+            var value = p.GetValue(model);
+            var t = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+            if (t == typeof(bool))
+            {
+                <input type="hidden" name="@name" value="false" />
+                <label class="inline" style="margin:12px 0 4px"><input type="checkbox" name="@name" value="true" checked="@(value is true)" /> @label</label>
+            }
+            else if (t.IsEnum)
+            {
+                <label for="@id">@label</label>
+                <select id="@id" name="@name">
+                    @foreach (var v in Enum.GetValues(t)) { <option value="@v" selected="@(Equals(v, value))">@Humanize(v.ToString()!)</option> }
+                </select>
+            }
+            else if (p.GetCustomAttribute<ThemeColorAttribute>() is not null)
+            {
+                <label for="@id">@label</label>
+                <select id="@id" name="@name">
+                    @foreach (var c in ThemeTokens.AllColors.Where(c => ThemeTokens.ColorNames.Contains(c.Key)))
+                    {
+                        <option value="@c.Key" selected="@(c.Key == (string?)value)">@c.Label</option>
+                    }
+                </select>
+            }
+            else if (p.GetCustomAttribute<MediaPickerAttribute>() is not null)
+            {
+                <label for="@id">@label</label>
+                <select id="@id" name="@name">
+                    <option value="">(none)</option>
+                    @foreach (var m in Media.Where(m => m.ContentType.StartsWith("image/", StringComparison.Ordinal)))
+                    {
+                        <option value="@m.Id" selected="@(Equals(m.Id, value))">@m.FileName</option>
+                    }
+                </select>
+                <div class="help"><a href="/admin/media" target="_blank">Upload images</a> in Media, then reselect the block.</div>
+            }
+            else if (p.GetCustomAttribute<MenuPickerAttribute>() is not null)
+            {
+                <label for="@id">@label</label>
+                <select id="@id" name="@name">
+                    @foreach (var m in Menus) { <option value="@m.Key" selected="@(m.Key == (string?)value)">@m.Name</option> }
+                </select>
+            }
+            else if (t == typeof(int))
+            {
+                var range = p.GetCustomAttribute<RangeAttribute>();
+                <label for="@id">@label</label>
+                <input id="@id" name="@name" type="number" value="@value" min="@range?.Minimum" max="@range?.Maximum" />
+            }
+            else if (p.GetCustomAttribute<DataTypeAttribute>()?.DataType == DataType.MultilineText)
+            {
+                <label for="@id">@label</label>
+                <textarea id="@id" name="@name" spellcheck="@(Node.Type == "html" ? "false" : "true")">@value</textarea>
+                @if (Node.Type == "markdown") { <div class="help">Markdown: **bold**, *italic*, [link](https://…), # heading, - list, > quote. The canvas updates as you type.</div> }
+            }
+            else
+            {
+                <label for="@id">@label</label>
+                <input id="@id" name="@name" type="text" value="@value" maxlength="@(p.GetCustomAttribute<StringLengthAttribute>()?.MaximumLength)" />
+            }
+        }
+        </fieldset>
+    </form>
+}
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [Parameter, EditorRequired] public EditorTarget Target { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public List<MediaItem> Media { get; set; } = [];
+    [Parameter] public List<Menu> Menus { get; set; } = [];
+
+    private static string Humanize(string s) =>
+        System.Text.RegularExpressions.Regex.Replace(s, "(?<=[a-z])(?=[A-Z])", " ");
+}

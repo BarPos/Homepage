@@ -1,0 +1,91 @@
+# Adapted from DomainNotice (MIT), https://github.com/BarPos/DomainNotice
+# Build and test. Runs only when started by hand (Actions → build → Run workflow) and as part of release.yml.
+# Produces downloadable artifacts (no release):
+#   server: Homepage.Server-<version>-linux-x64.tar.gz, Homepage.Server-<version>-linux-arm64.tar.gz, install.sh
+name: build
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      version:
+        description: "Version from Directory.Build.props"
+        value: ${{ jobs.version.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props | head -n1)"
+          app="$(sed -n 's:.*const string Current = "\([^"]*\)".*:\1:p' Homepage.Shared/AppVersion.cs | head -n1)"
+          [[ "$version" =~ ^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$ ]] || { echo "::error::Directory.Build.props version '$version' is not x.y.z"; exit 1; }
+          [[ "$app" == "$version" ]] || { echo "::error::AppVersion.Current ($app) does not match Directory.Build.props ($version)"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Shell checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in build/build-server.sh deploy/linux/install.sh deploy/linux/update.sh deploy/linux/backup.sh deploy/linux/tests/*.sh; do bash -n "$f"; done
+          # shellcheck findings are reported but do not fail the build.
+          if command -v shellcheck >/dev/null; then
+            shellcheck -x -S warning build/build-server.sh deploy/linux/*.sh deploy/linux/tests/*.sh ||
+              echo "::warning::shellcheck reported findings (non-blocking)"
+          fi
+          deploy/linux/update.sh --self-test
+          deploy/linux/tests/update-functions-test.sh
+      - name: Build solution
+        run: dotnet build Homepage.slnx -c Release
+      - name: Tests (PostgreSQL 16 via Testcontainers)
+        run: dotnet test --project Homepage.Tests
+
+  server:
+    name: Server tarballs
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: build-server.sh
+        run: build/build-server.sh --arch x64 --arch arm64
+      - name: Check asset names
+        shell: bash
+        run: |
+          v='${{ needs.version.outputs.version }}'
+          test -f "artifacts/Homepage.Server-$v-linux-x64.tar.gz"
+          test -f "artifacts/Homepage.Server-$v-linux-arm64.tar.gz"
+          test -f artifacts/install.sh
+          # List to a file first: "tar | grep -q" makes tar fail with a write error under pipefail.
+          tar -tzf "artifacts/Homepage.Server-$v-linux-x64.tar.gz" > "$RUNNER_TEMP/server-files.txt"
+          # The site's static files come from the Homepage.Web Razor class library.
+          grep -qE '^(\./)?wwwroot/_content/Homepage\.Web/css/site\.css$' "$RUNNER_TEMP/server-files.txt"
+          grep -qE '^(\./)?Homepage\.Server$' "$RUNNER_TEMP/server-files.txt"
+          grep -qE '^(\./)?deploy/linux/update\.sh$' "$RUNNER_TEMP/server-files.txt"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: server
+          if-no-files-found: error
+          path: |
+            artifacts/Homepage.Server-*.tar.gz
+            artifacts/install.sh

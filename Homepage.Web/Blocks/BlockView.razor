@@ -1,0 +1,16 @@
+@{
+    var type = BlockComponents.Get(Node.Type);
+}
+@if (type is not null)
+{
+    <DynamicComponent Type="type" Parameters="@(new Dictionary<string, object> { ["Node"] = Node })" />
+}
+else if (Ctx.Edit)
+{
+    <div class="hp-unknown">Unsupported block “@Node.Type” (kept, not shown on the site)</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+}

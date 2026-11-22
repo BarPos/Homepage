@@ -1,0 +1,56 @@
+# Adapted from DomainNotice (MIT), https://github.com/BarPos/DomainNotice
+# Homepage server. Installed by install.sh to /etc/systemd/system/.
+[Unit]
+Description=Homepage server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+# The server uses UseSystemd() and reports readiness itself.
+Type=notify
+User=homepage
+Group=homepage
+WorkingDirectory=/opt/homepage/current
+ExecStart=/opt/homepage/current/Homepage.Server
+Environment=HOMEPAGE_CONFIG=/opt/homepage/config/appsettings.Production.json
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_NOLOGO=1
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+# Migrations run at start; give them time.
+TimeoutStartSec=300
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5s
+
+# Bind ports below 1024 (443 in https mode, or a low port chosen with --port) without root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Hardening. The program files (releases/, current) and config/ are read-only for the service. It writes only its
+# data folder (media uploads, Data Protection keys, generated theme CSS, staged updates). backups/ is root-only
+# (root writes there).
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/homepage/data
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+UMask=0077
+# Not set on purpose: MemoryDenyWriteExecute (it breaks the .NET JIT).
+
+[Install]
+WantedBy=multi-user.target

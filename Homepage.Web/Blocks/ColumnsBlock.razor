@@ -1,0 +1,7 @@
+@{ var p = Node.PropsAs<ColumnsProps>(); }
+<div class="blk">
+    <BlockList Nodes="Node.Children" ParentId="@Node.Id" Class="@($"cols {Css.Ratio(p.Ratio)} gap-{Css.Spacing(p.Gap)}")" Wrap="true" />
+</div>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+}

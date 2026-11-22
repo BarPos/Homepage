@@ -1,0 +1,9 @@
+@* Re-rendered edited tree, swapped into the canvas after each change. *@
+<CascadingValue Value="Ctx" IsFixed="true">
+    <BlockList Nodes="Tree.Blocks" Contain="Contain" />
+</CascadingValue>
+@code {
+    [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
+    [Parameter, EditorRequired] public BlockTree Tree { get; set; } = default!;
+    [Parameter] public bool Contain { get; set; }
+}

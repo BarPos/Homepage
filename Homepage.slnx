@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Homepage.Core/Homepage.Core.csproj" />
+  <Project Path="Homepage.Server/Homepage.Server.csproj" />
+  <Project Path="Homepage.Shared/Homepage.Shared.csproj" />
+  <Project Path="Homepage.Tests/Homepage.Tests.csproj" />
+  <Project Path="Homepage.Web/Homepage.Web.csproj" />
+</Solution>

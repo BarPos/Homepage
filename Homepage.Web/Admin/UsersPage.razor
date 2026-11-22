@@ -1,0 +1,39 @@
+<AdminShell Title="Users & permissions" Section="access">
+    <AccessTabs Active="users" />
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <div class="card">
+        <h2 style="margin-top:0">New user</h2>
+        <form method="post" action="/admin/users" class="form-row" style="grid-template-columns:1fr 1fr 1fr auto;align-items:end">
+            <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+            <div><label for="un">User name</label><input id="un" name="userName" type="text" required maxlength="64" autocomplete="off" /></div>
+            <div><label for="dn">Display name</label><input id="dn" name="displayName" type="text" maxlength="200" /></div>
+            <div><label for="pw">Password (min. @Homepage.Accounts.AccountService.MinPasswordLength)</label><input id="pw" name="password" type="password" required autocomplete="new-password" /></div>
+            <div><button class="btn-primary">Create</button></div>
+        </form>
+        <div class="help">New users have no permissions until you give them roles or group permissions.</div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>User</th><th>Roles</th><th>Status</th><th>Created</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var u in Users)
+                {
+                    <tr>
+                        <td><strong>@u.UserName</strong><div class="muted small">@u.DisplayName</div></td>
+                        <td>@string.Join(", ", RolesByUser.GetValueOrDefault(u.Id, []))</td>
+                        <td>@if (u.Valid) { <span class="badge badge-ok">valid</span> } else { <span class="badge badge-off">invalid</span> }</td>
+                        <td class="muted">@u.CreatedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                        <td class="right"><a class="btn btn-sm" href="/admin/users/@u.Id">Edit</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public List<User> Users { get; set; } = [];
+    [Parameter] public Dictionary<int, List<string>> RolesByUser { get; set; } = [];
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

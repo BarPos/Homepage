@@ -1,0 +1,11 @@
+<AdminShell Title="@Heading">
+    <div class="card">
+        <p>@Text</p>
+        <p><a class="btn" href="@(BackUrl ?? "/admin")">Back</a></p>
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public string Heading { get; set; } = "";
+    [Parameter] public string Text { get; set; } = "";
+    [Parameter] public string? BackUrl { get; set; }
+}

@@ -1,0 +1,45 @@
+@* Renders a list of blocks. The wrapper element is the same in the site and the canvas (so layout CSS is identical);
+   in edit mode each block is wrapped in .hp-block and the list is a drop zone (data-parent). *@
+@if (Ctx.Edit)
+{
+    <div class="@Class hp-list" data-parent="@(ParentId ?? "")">
+        @foreach (var node in Nodes)
+        {
+            var def = BlockRegistry.Get(node.Type);
+            <div class="hp-block" data-block-id="@node.Id" data-block-type="@node.Type" data-container="@(def?.IsContainer == true ? "1" : null)"
+                 data-label="@(def?.Label ?? node.Type)">
+                @if (NeedsContainer(node)) { <div class="container"><BlockView Node="node" /></div> } else { <BlockView Node="node" /> }
+            </div>
+        }
+        @if (Nodes.Count == 0)
+        {
+            <div class="hp-empty">@(ParentId is null ? "Drag blocks here from the panel on the left" : "Drop blocks here")</div>
+        }
+    </div>
+}
+else if (Wrap)
+{
+    <div class="@Class">
+        @foreach (var node in Nodes) { <BlockView Node="node" /> }
+    </div>
+}
+else
+{
+    @foreach (var node in Nodes)
+    {
+        @if (NeedsContainer(node)) { <div class="container"><BlockView Node="node" /></div> } else { <BlockView Node="node" /> }
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public List<BlockNode> Nodes { get; set; } = [];
+    [Parameter] public string? ParentId { get; set; }
+    [Parameter] public string? Class { get; set; }
+    /// <summary>Render the wrapper element outside edit mode too (grids need it).</summary>
+    [Parameter] public bool Wrap { get; set; }
+    /// <summary>Top level of a page: blocks outside a section get the page container, so they don't run edge to edge.</summary>
+    [Parameter] public bool Contain { get; set; }
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+
+    private bool NeedsContainer(BlockNode node) => Contain && ParentId is null && node.Type is not ("section" or "siteheader");
+}

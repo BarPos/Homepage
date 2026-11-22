@@ -1,0 +1,16 @@
+<AdminShell Title="Audit log" Section="audit">
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Object</th><th>Details</th></tr></thead>
+            <tbody>
+                @foreach (var a in Entries)
+                {
+                    <tr><td class="nowrap muted">@a.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td><td>@a.Actor</td><td><code>@a.Action</code></td><td>@a.Entity @a.EntityId</td><td>@a.Details</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public List<AuditEntry> Entries { get; set; } = [];
+}

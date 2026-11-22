@@ -1,0 +1,76 @@
+<AdminShell Title="@($"Settings: {Item.Title}")" Section="@(Item.Type == ContentType.Post ? "posts" : "pages")">
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <div class="grid2">
+        <div class="card">
+            <form method="post" action="/admin/content/@Item.Id">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <label for="t">Title</label>
+                <input id="t" name="title" type="text" value="@Item.Title" required maxlength="300" disabled="@(!CanEdit)" />
+                <label for="s">Address</label>
+                <input id="s" name="slug" type="text" value="@Item.Slug" required maxlength="200" disabled="@(!CanEdit)" />
+                <div class="help">@PublicUrl</div>
+                <label for="e">Excerpt / description</label>
+                <textarea id="e" name="excerpt" maxlength="1000" disabled="@(!CanEdit)" style="font-family:inherit">@Item.Excerpt</textarea>
+                <div class="help">Used for search engines, social previews and post lists. Generated from the text when empty.</div>
+                <label for="g">Group</label>
+                <select id="g" name="groupId" disabled="@(!CanEdit)">
+                    @foreach (var g in MoveTargets) { <option value="@g.Id" selected="@(g.Id == Item.GroupId)">@g.Name</option> }
+                </select>
+                <div class="help">Moving to another group needs rw here and create there.</div>
+                @if (CanEdit) { <div class="form-actions"><button class="btn-primary">Save</button></div> }
+            </form>
+        </div>
+        <div class="card">
+            <h2 style="margin-top:0">Publishing</h2>
+            <p>Status: @StatusText <span class="muted">@FirstPublished</span></p>
+            <div class="form-actions">
+                <a class="btn" href="/admin/editor/content-@Item.Id">Open in editor</a>
+                @if (Item.Status == ContentStatus.Published)
+                {
+                    <a class="btn" target="_blank" href="@PublicUrl">View ↗</a>
+                }
+                @if (CanPublish)
+                {
+                    <form method="post" action="/admin/content/@Item.Id/publish" style="margin:0">
+                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                        <button class="btn-primary">Publish draft</button>
+                    </form>
+                    @if (Item.Status == ContentStatus.Published)
+                    {
+                        <form method="post" action="/admin/content/@Item.Id/unpublish" style="margin:0">
+                            <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                            <button>Unpublish</button>
+                        </form>
+                    }
+                }
+            </div>
+            @if (CanDelete)
+            {
+                <h2>Delete</h2>
+                <form method="post" action="/admin/content/@Item.Id/delete" data-confirm="Delete this item permanently?">
+                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                    <button class="btn-danger">Delete permanently</button>
+                </form>
+            }
+            <h2>Revisions</h2>
+            @if (Revisions.Count == 0) { <p class="muted">No published revisions yet.</p> }
+            <ul>
+                @foreach (var r in Revisions) { <li>@r.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) · @r.Title</li> }
+            </ul>
+        </div>
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public ContentItem Item { get; set; } = default!;
+    [Parameter] public List<Group> MoveTargets { get; set; } = [];
+    [Parameter] public List<Revision> Revisions { get; set; } = [];
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public bool CanPublish { get; set; }
+    [Parameter] public bool CanDelete { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string PublicUrl => (Item.Type == ContentType.Post ? "/blog/" : "/") + Item.Slug;
+    private string StatusText => Item.Status == ContentStatus.Published ? "Published" : "Draft";
+    private string FirstPublished => Item.PublishedAtUtc is { } p ? "· first published " + p.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "";
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

@@ -1,0 +1,29 @@
+@* The editor canvas: the real site document, with the edited region interactive. *@
+<CascadingValue Value="Ctx" IsFixed="true">
+    <SiteDocument Title="@Title" CanvasMode="true">
+        @if (Ctx.EditRegion == "main")
+        {
+            @if (IsPost)
+            {
+                <article>
+                    <div class="post-header container sec-narrow"><h1>@Title</h1><div class="post-meta">Draft preview</div></div>
+                    <div class="post-body container"><BlockList Nodes="Main.Blocks" /></div>
+                </article>
+            }
+            else
+            {
+                <BlockList Nodes="Main.Blocks" Contain="true" />
+            }
+        }
+        else
+        {
+            <section class="sec pad-xl"><div class="container sec-narrow al-center"><h1>Page content</h1><p class="muted">Pages appear here. You are editing the @Ctx.EditRegion.</p></div></section>
+        }
+    </SiteDocument>
+</CascadingValue>
+@code {
+    [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
+    [Parameter, EditorRequired] public BlockTree Main { get; set; } = default!;
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool IsPost { get; set; }
+}

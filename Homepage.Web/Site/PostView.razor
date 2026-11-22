@@ -1,0 +1,22 @@
+<CascadingValue Value="Ctx" IsFixed="true">
+    <SiteDocument Title="@Item.Title" Description="@Item.Excerpt" CanonicalUrl="@Canonical">
+        <article>
+            <div class="post-header container sec-narrow">
+                <h1>@Item.Title</h1>
+                <div class="post-meta">
+                    @Item.PublishedAtUtc?.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)
+                    · @ContentExtractor.ReadingMinutes(Item.SearchText) min read
+                </div>
+            </div>
+            <div class="post-body container">
+                <BlockList Nodes="Tree.Blocks" />
+            </div>
+        </article>
+    </SiteDocument>
+</CascadingValue>
+@code {
+    [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
+    [Parameter, EditorRequired] public ContentItem Item { get; set; } = default!;
+    [Parameter, EditorRequired] public BlockTree Tree { get; set; } = default!;
+    private string? Canonical => string.IsNullOrEmpty(Ctx.Site.BaseUrl) ? null : Ctx.Site.BaseUrl.TrimEnd('/') + "/blog/" + Item.Slug;
+}

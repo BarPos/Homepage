@@ -1,0 +1,16 @@
+<CascadingValue Value="Ctx" IsFixed="true">
+    <SiteDocument Title="@Heading">
+        <section class="sec sec-narrow pad-xl">
+            <div class="container al-center">
+                <h1>@Heading</h1>
+                <p class="muted">@Text</p>
+                <p><a class="btn btn-primary" href="/">Go to the home page</a></p>
+            </div>
+        </section>
+    </SiteDocument>
+</CascadingValue>
+@code {
+    [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
+    [Parameter] public string Heading { get; set; } = "Page not found";
+    [Parameter] public string Text { get; set; } = "The page you are looking for does not exist.";
+}

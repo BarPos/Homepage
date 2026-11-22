@@ -1,0 +1,13 @@
+# Adapted from DomainNotice (MIT), https://github.com/BarPos/DomainNotice
+# Starts homepage-update.service when the server stages an update (data/updates/request.conf).
+# The server writes request.conf atomically (temp file + rename). update.sh removes it before anything else,
+# because PathExists= fires again as long as the file exists.
+[Unit]
+Description=Watch for Homepage update requests
+
+[Path]
+PathExists=/opt/homepage/data/updates/request.conf
+Unit=homepage-update.service
+
+[Install]
+WantedBy=multi-user.target

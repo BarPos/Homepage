@@ -1,0 +1,64 @@
+<AdminShell Title="Settings" Section="settings">
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert" style="border-color:var(--ok);color:var(--ok)">@Message</div> }
+    <div class="grid2">
+        <div class="card">
+            <h2 style="margin-top:0">Site</h2>
+            <form method="post" action="/admin/settings">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <label for="t">Site title</label><input id="t" name="title" type="text" value="@S.Title" maxlength="200" required />
+                <label for="tg">Tagline</label><input id="tg" name="tagline" type="text" value="@S.Tagline" maxlength="300" />
+                <label for="bu">Public address</label><input id="bu" name="baseUrl" type="text" value="@S.BaseUrl" placeholder="https://example.com" maxlength="300" />
+                <div class="help">Used for RSS, the sitemap and canonical links. Leave empty to use the request's address.</div>
+                <label for="hp">Home page</label>
+                <select id="hp" name="homePageId">
+                    <option value="">Latest blog posts</option>
+                    @foreach (var p in Pages) { <option value="@p.Id" selected="@(p.Id == S.HomePageId)">@p.Title</option> }
+                </select>
+                <label for="dg">Default group for new content</label>
+                <select id="dg" name="defaultGroupId">
+                    @foreach (var g in Groups) { <option value="@g.Id" selected="@(g.Id == S.DefaultGroupId)">@g.Name</option> }
+                </select>
+                <div class="form-actions"><button class="btn-primary">Save</button></div>
+            </form>
+        </div>
+        <div class="card">
+            <h2 style="margin-top:0">About and updates</h2>
+            <p>Version <strong>@Update.CurrentVersion</strong></p>
+            @if (!Update.Configured)
+            {
+                <p class="muted">Updates are not configured (Updates:GitHubRepository is empty), so the server makes no update checks.</p>
+            }
+            else
+            {
+                <p>Latest release: @(Update.Latest?.Version ?? "unknown")
+                    @if (Update.LastCheckedUtc is { } c) { <span class="muted small">· checked @c.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</span> }</p>
+                @if (Update.LastError is { } err) { <p class="inline-alert">@err</p> }
+                @if (Update.Latest?.Notes is { Length: > 0 } notes) { <details><summary>Release notes</summary><pre style="white-space:pre-wrap">@notes</pre></details> }
+                <div class="form-actions">
+                    <form method="post" action="/admin/updates/check" style="margin:0"><input type="hidden" name="__RequestVerificationToken" value="@Token" /><button>Check now</button></form>
+                    @if (Update.UpdateAvailable)
+                    {
+                        <form method="post" action="/admin/updates/apply" style="margin:0" data-confirm="Update now? The site restarts; a failed update is rolled back automatically.">
+                            <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                            <button class="btn-primary" disabled="@(!Update.SelfUpdateSupported)">Update now</button>
+                        </form>
+                    }
+                </div>
+                @if (!Update.SelfUpdateSupported) { <p class="help">@Update.UnsupportedReason</p> }
+            }
+            @if (Update.LastRun is { } run)
+            {
+                <p class="small">Last update: @run.FromVersion → @run.ToVersion: <strong>@run.State</strong> @run.Message</p>
+            }
+        </div>
+    </div>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public SiteSettings S { get; set; } = default!;
+    [Parameter] public List<ContentItem> Pages { get; set; } = [];
+    [Parameter] public List<Group> Groups { get; set; } = [];
+    [Parameter, EditorRequired] public Homepage.Updates.UpdateStatus Update { get; set; } = default!;
+    [Parameter] public string? Message { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

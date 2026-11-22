@@ -1,0 +1,6 @@
+<div class="col">
+    <BlockList Nodes="Node.Children" ParentId="@Node.Id" />
+</div>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+}

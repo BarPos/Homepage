@@ -1,0 +1,25 @@
+@inject PublicContent Content
+@{ var p = Node.PropsAs<ImageProps>(); }
+<div class="blk img img-@p.Width.ToString().ToLowerInvariant()">
+    @if (_url is null)
+    {
+        @if (Ctx.Edit) { <div class="img-placeholder">Choose an image in the panel on the right</div> }
+    }
+    else
+    {
+        <figure>
+            <img src="@_url" alt="@p.Alt" loading="lazy" />
+            @if (!string.IsNullOrWhiteSpace(p.Caption)) { <figcaption>@p.Caption</figcaption> }
+        </figure>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+    private string? _url;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Node.PropsAs<ImageProps>().MediaId is { } id) _url = await Content.MediaUrlAsync(id);
+    }
+}

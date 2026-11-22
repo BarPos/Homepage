@@ -1,0 +1,11 @@
+@{ var p = Node.PropsAs<HeadingProps>(); var cls = "blk " + Css.Align(p.Align); }
+@switch (Math.Clamp(p.Level, 1, 4))
+{
+    case 1: <h1 class="@cls">@p.Text</h1> break;
+    case 2: <h2 class="@cls">@p.Text</h2> break;
+    case 3: <h3 class="@cls">@p.Text</h3> break;
+    default: <h4 class="@cls">@p.Text</h4> break;
+}
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+}

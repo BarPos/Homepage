@@ -1,0 +1,12 @@
+@inject MenuService Menus
+@{ var p = Node.PropsAs<MenuProps>(); }
+<nav class="blk" aria-label="Menu">
+    <ul class="menu @Css.Align(p.Align)">
+        @foreach (var link in _links) { <li><a href="@link.Url">@link.Label</a></li> }
+    </ul>
+</nav>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    private IReadOnlyList<MenuLink> _links = [];
+    protected override async Task OnInitializedAsync() => _links = await Menus.GetLinksAsync(Node.PropsAs<MenuProps>().MenuKey);
+}

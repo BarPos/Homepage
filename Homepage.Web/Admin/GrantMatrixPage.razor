@@ -1,0 +1,54 @@
+@* OTRS-style relation screens: pick a user or role, then toggle each permission type per group. *@
+<AdminShell Title="Users & permissions" Section="access">
+    <AccessTabs Active="@Mode" />
+    <form method="get" class="toolbar">
+        <label for="s" style="margin:0">@(Mode == "user-groups" ? "User" : "Role")</label>
+        <select id="s" name="id" data-autosubmit style="max-width:300px">
+            @foreach (var (id, name) in Subjects) { <option value="@id" selected="@(id == SubjectId)">@name</option> }
+        </select>
+        <span class="muted small">Changes are saved immediately. rw implies every other permission.</span>
+    </form>
+    @if (SubjectId is { } sid)
+    {
+        <div class="table-wrap">
+            <table class="matrix">
+                <thead><tr><th>Group</th>@foreach (var (_, k) in PermNames.All) { <th title="@Describe(k)">@k</th> }</tr></thead>
+                <tbody>
+                    @foreach (var g in Groups)
+                    {
+                        <tr>
+                            <td>@g.Name @if (!g.Valid) { <span class="badge badge-off">invalid</span> } <div class="muted small">@g.Comment</div></td>
+                            @foreach (var (p, k) in PermNames.All)
+                            {
+                                var on = Granted.Contains((g.Id, k));
+                                <td>
+                                    <input type="checkbox" aria-label="@($"{g.Name} {k}")" checked="@on"
+                                           hx-post="/admin/permissions/@Mode" hx-swap="none" hx-trigger="change"
+                                           hx-vals='@($"{{\"subjectId\":{sid},\"groupId\":{g.Id},\"perm\":\"{k}\"}}")'
+                                           name="granted" value="true" hx-include="this" />
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</AdminShell>
+@code {
+    [Parameter] public string Mode { get; set; } = "user-groups";
+    [Parameter] public List<(int Id, string Name)> Subjects { get; set; } = [];
+    [Parameter] public int? SubjectId { get; set; }
+    [Parameter] public List<Group> Groups { get; set; } = [];
+    [Parameter] public HashSet<(int GroupId, string Perm)> Granted { get; set; } = [];
+
+    private static string Describe(string k) => k switch
+    {
+        "ro" => "See items, drafts and revisions",
+        "create" => "Create items; edit and delete own unpublished items",
+        "edit" => "Edit anyone's items",
+        "publish" => "Publish, unpublish, restore revisions",
+        "delete" => "Delete anyone's items",
+        _ => "Everything, and moving items to other groups",
+    };
+}

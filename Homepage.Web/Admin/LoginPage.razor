@@ -1,0 +1,24 @@
+<AdminShell Title="Sign in" ShowTitle="false">
+    <div class="login">
+        <div class="card">
+            <h1>Sign in</h1>
+            @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+            <form method="post" action="/admin/login">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                <label for="u">User name</label>
+                <input id="u" name="userName" type="text" autocomplete="username" required value="@UserName" autofocus />
+                <label for="p">Password</label>
+                <input id="p" name="password" type="password" autocomplete="current-password" required />
+                <div class="form-actions"><button class="btn-primary" type="submit">Sign in</button></div>
+            </form>
+        </div>
+        <p class="muted small">Forgot your password? An administrator can reset it, or on the server run <code>install.sh --reset-password</code>.</p>
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public string Token { get; set; } = "";
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string? UserName { get; set; }
+    [Parameter] public string? ReturnUrl { get; set; }
+}

@@ -1,0 +1,81 @@
+@* The admin document: navigation filtered by permission, htmx + Alpine, CSRF token for htmx requests. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content="@A?.CsrfToken" />
+    <title>@Title · Homepage admin</title>
+    <link rel="stylesheet" href="@Asset.Url("css/admin.css")" />
+    <script src="@Asset.Url("lib/htmx.min.js")" defer></script>
+    <script src="@Asset.Url("js/admin.js")" defer></script>
+    @if (Scripts is not null) { @Scripts }
+    <script src="@Asset.Url("lib/alpine.min.js")" defer></script>
+</head>
+<body class="@BodyClass">
+    @if (A is not null)
+    {
+        <header class="topbar">
+            <a class="brand" href="/admin">Homepage</a>
+            <nav class="nav">
+                <a href="/admin" class="@Active("dashboard")">Dashboard</a>
+                <a href="/admin/content?type=page" class="@Active("pages")">Pages</a>
+                <a href="/admin/content?type=post" class="@Active("posts")">Posts</a>
+                <a href="/admin/media" class="@Active("media")">Media</a>
+                @if (P.HasSystem(SystemGroups.Themes, Perm.Ro) || P.HasSystem(SystemGroups.Layout, Perm.Ro))
+                {
+                    <a href="/admin/themes" class="@Active("themes")">Themes</a>
+                }
+                @if (P.HasSystem(SystemGroups.Layout, Perm.Rw))
+                {
+                    <a href="/admin/menus" class="@Active("menus")">Menus</a>
+                }
+                @if (P.IsAdmin)
+                {
+                    <a href="/admin/users" class="@Active("access")">Users &amp; permissions</a>
+                    <a href="/admin/settings" class="@Active("settings")">Settings</a>
+                }
+                @if (P.HasSystem(SystemGroups.Audit, Perm.Ro))
+                {
+                    <a href="/admin/audit" class="@Active("audit")">Audit log</a>
+                }
+            </nav>
+            <div class="me">
+                <a href="/" target="_blank" rel="noopener">View site ↗</a>
+                <span class="muted">@A.DisplayName</span>
+                <form method="post" action="/admin/logout">
+                    <input type="hidden" name="__RequestVerificationToken" value="@A.CsrfToken" />
+                    <button class="link">Sign out</button>
+                </form>
+            </div>
+        </header>
+    }
+    <div id="flash" class="flash" aria-live="polite"></div>
+    @if (Full)
+    {
+        @ChildContent
+    }
+    else
+    {
+        <main class="page">
+            @if (!string.IsNullOrEmpty(Title) && ShowTitle) { <h1>@Title</h1> }
+            @ChildContent
+        </main>
+    }
+</body>
+</html>
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Section { get; set; } = "";
+    [Parameter] public bool ShowTitle { get; set; } = true;
+    /// <summary>Full-screen layout (the editor) without the page container.</summary>
+    [Parameter] public bool Full { get; set; }
+    [Parameter] public string? BodyClass { get; set; }
+    [Parameter] public RenderFragment? Scripts { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+
+    private AdminContext? A => HttpContext is null ? null : AdminContext.From(HttpContext);
+    private EffectivePermissions P => A?.Perms ?? EffectivePermissions.Nobody;
+    private string? Active(string s) => s == Section ? "active" : null;
+}

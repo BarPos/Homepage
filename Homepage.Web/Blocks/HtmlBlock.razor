@@ -1,0 +1,5 @@
+@inject MarkdownRenderer Sanitizer
+<div class="blk html-block">@((MarkupString)Sanitizer.SanitizeHtml(Node.PropsAs<HtmlProps>().Html))</div>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+}

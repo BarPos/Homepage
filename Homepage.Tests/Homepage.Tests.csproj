@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="xunit.v3" />
+        <PackageReference Include="Testcontainers.PostgreSql" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Homepage.Shared\Homepage.Shared.csproj" />
+        <ProjectReference Include="..\Homepage.Core\Homepage.Core.csproj" />
+        <ProjectReference Include="..\Homepage.Web\Homepage.Web.csproj" />
+        <ProjectReference Include="..\Homepage.Server\Homepage.Server.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Include="..\Directory.Build.props" Link="Directory.Build.props.copy" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+    <ItemGroup>
+        <Using Include="Xunit" />
+        <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+</Project>

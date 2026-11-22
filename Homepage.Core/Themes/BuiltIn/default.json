@@ -1,0 +1,11 @@
+{
+  "name": "Glass",
+  "slug": "clean",
+  "tokens": {
+    "light": { "bg": "#f3f2ee", "surface": "#ffffff", "surface-alt": "#e9e7e1", "text": "#16171b", "muted": "#5c606a", "border": "#d9d6ce", "primary": "#2a4fd6", "primary-text": "#ffffff", "accent": "#e0552c", "accent-text": "#ffffff" },
+    "dark":  { "bg": "#0d0f13", "surface": "#171a20", "surface-alt": "#1c2028", "text": "#ecedf0", "muted": "#9da2ad", "border": "#2a2e37", "primary": "#8ea6ff", "primary-text": "#0a1030", "accent": "#ff8d68", "accent-text": "#200d06" },
+    "colorMode": "auto", "bodyFont": "system-sans", "headingFont": "system-sans",
+    "baseSize": 17, "scale": 1.25, "lineHeight": 1.6, "radius": 18, "shadow": "soft", "containerWidth": 1120, "spacingUnit": 1,
+    "glass": true, "glassBlur": 20, "glassOpacity": 0.6, "backdrop": "mesh"
+  }
+}

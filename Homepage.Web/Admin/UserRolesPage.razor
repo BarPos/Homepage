@@ -1,0 +1,28 @@
+<AdminShell Title="Users & permissions" Section="access">
+    <AccessTabs Active="user-roles" />
+    <p class="muted small">Changes are saved immediately.</p>
+    <div class="table-wrap">
+        <table class="matrix">
+            <thead><tr><th>User</th>@foreach (var r in Roles) { <th>@r.Name @if (!r.Valid) { <span class="badge badge-off">invalid</span> }</th> }</tr></thead>
+            <tbody>
+                @foreach (var u in Users)
+                {
+                    <tr>
+                        <td>@u.UserName @if (!u.Valid) { <span class="badge badge-off">invalid</span> }</td>
+                        @foreach (var r in Roles)
+                        {
+                            <td><input type="checkbox" aria-label="@($"{u.UserName} {r.Name}")" checked="@Members.Contains((u.Id, r.Id))"
+                                       hx-post="/admin/permissions/user-roles" hx-swap="none" hx-trigger="change"
+                                       hx-vals='@($"{{\"userId\":{u.Id},\"roleId\":{r.Id}}}")' name="member" value="true" hx-include="this" /></td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public List<User> Users { get; set; } = [];
+    [Parameter] public List<Role> Roles { get; set; } = [];
+    [Parameter] public HashSet<(int UserId, int RoleId)> Members { get; set; } = [];
+}

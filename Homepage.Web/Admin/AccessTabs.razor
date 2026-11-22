@@ -1,0 +1,18 @@
+<nav class="tabs">
+    @foreach (var (key, label, url) in Tabs)
+    {
+        <a href="@url" class="@(key == Active ? "active" : null)">@label</a>
+    }
+</nav>
+@code {
+    [Parameter] public string Active { get; set; } = "";
+    private static readonly (string, string, string)[] Tabs =
+    [
+        ("users", "Users", "/admin/users"),
+        ("groups", "Groups", "/admin/groups"),
+        ("roles", "Roles", "/admin/roles"),
+        ("user-groups", "Users ↔ Groups", "/admin/permissions/user-groups"),
+        ("role-groups", "Roles ↔ Groups", "/admin/permissions/role-groups"),
+        ("user-roles", "Users ↔ Roles", "/admin/permissions/user-roles"),
+    ];
+}

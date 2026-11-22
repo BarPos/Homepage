@@ -1,0 +1,31 @@
+<div class="table-wrap" id="content-table">
+    <table>
+        <thead><tr><th>Title</th><th>Type</th><th>Group</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var c in Items)
+            {
+                <tr>
+                    <td><a href="/admin/editor/content-@c.Id"><strong>@c.Title</strong></a><div class="muted small">@((c.Type == ContentType.Post ? "/blog/" : "/") + c.Slug)</div></td>
+                    <td>@(c.Type == ContentType.Post ? "Post" : "Page")</td>
+                    <td><span class="badge">@GroupNames.GetValueOrDefault(c.GroupId, "?")</span></td>
+                    <td>
+                        @if (c.Status == ContentStatus.Published) { <span class="badge badge-ok">Published</span> }
+                        else { <span class="badge">Draft</span> }
+                        @if (c.Status == ContentStatus.Published && c.DraftBlocks != c.Blocks) { <span class="badge badge-warn" title="The draft differs from the published version">changes</span> }
+                    </td>
+                    <td class="nowrap muted">@c.UpdatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
+                    <td class="right nowrap">
+                        <a class="btn btn-sm" href="/admin/editor/content-@c.Id">Edit</a>
+                        <a class="btn btn-sm" href="/admin/content/@c.Id">Settings</a>
+                    </td>
+                </tr>
+            }
+            @if (Items.Count == 0) { <tr><td colspan="6" class="muted">Nothing here yet.</td></tr> }
+        </tbody>
+    </table>
+</div>
+@code {
+    [Parameter] public List<ContentItem> Items { get; set; } = [];
+    [Parameter] public Dictionary<int, string> Groups { get; set; } = [];
+    private Dictionary<int, string> GroupNames => Groups;
+}

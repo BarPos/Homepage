@@ -1,0 +1,82 @@
+using System.Threading.RateLimiting;
+using Homepage.Web.Endpoints;
+using Homepage.Web.Rendering;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Hosting;
+
+namespace Homepage.Web;
+
+public static class WebExtensions
+{
+    public static IServiceCollection AddHomepageWeb(this IServiceCollection services)
+    {
+        services.AddRazorComponents();
+        services.AddScoped<RenderContextFactory>();
+        services.AddSingleton<PublicContent>();
+        services.AddScoped<AdminFilter>();
+        services.AddOutputCache(SiteEndpoints.AddPublicCachePolicy);
+        services.AddAntiforgery(o =>
+        {
+            o.Cookie.Name = "hp_af";
+            o.Cookie.Path = "/admin";
+            o.Cookie.SameSite = SameSiteMode.Strict;
+            o.HeaderName = "RequestVerificationToken";
+        });
+        // The admin cookie is scoped to /admin: public pages never see it, so they stay cacheable for everyone.
+        services.AddAuthentication(AdminAuth.Scheme)
+            .AddCookie(AdminAuth.Scheme, o =>
+            {
+                o.Cookie.Name = "hp_admin";
+                o.Cookie.Path = "/admin";
+                o.Cookie.HttpOnly = true;
+                o.Cookie.SameSite = SameSiteMode.Strict;
+                o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                o.LoginPath = "/admin/login";
+                o.AccessDeniedPath = "/admin/login";
+                o.ExpireTimeSpan = TimeSpan.FromHours(8);
+                o.SlidingExpiration = true;
+            });
+        services.AddAuthorization();
+        services.AddRateLimiter(o =>
+        {
+            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            o.AddPolicy("signin", ctx => RateLimitPartition.GetFixedWindowLimiter(
+                ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+        });
+        return services;
+    }
+
+    public const string PublicCsp =
+        "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; " +
+        "frame-src https://www.youtube-nocookie.com https://player.vimeo.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'";
+
+    // Alpine.js evaluates its expressions with Function(), hence 'unsafe-eval' in the admin only. No inline scripts or handlers.
+    public const string AdminCsp =
+        "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+        "frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'";
+
+    /// <summary>Security headers, output cache, auth and all endpoints. Call after UseForwardedHeaders.</summary>
+    public static void UseHomepageWeb(this WebApplication app)
+    {
+        app.Use(async (ctx, next) =>
+        {
+            var h = ctx.Response.Headers;
+            var isAdmin = ctx.Request.Path.StartsWithSegments("/admin");
+            h["X-Content-Type-Options"] = "nosniff";
+            h["Referrer-Policy"] = "strict-origin-when-cross-origin";
+            h["X-Frame-Options"] = isAdmin ? "SAMEORIGIN" : "DENY";
+            if (!h.ContainsKey("Content-Security-Policy")) h["Content-Security-Policy"] = isAdmin ? AdminCsp : PublicCsp;
+            if (isAdmin) h.CacheControl = "no-store";
+            await next();
+        });
+        app.UseStaticFiles();
+        app.UseRateLimiter();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseAntiforgery();
+        app.UseOutputCache();
+        app.MapAdmin();
+        app.MapSite();
+    }
+}

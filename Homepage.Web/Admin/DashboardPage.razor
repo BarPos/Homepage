@@ -1,0 +1,29 @@
+<AdminShell Title="Dashboard" Section="dashboard">
+    <div class="stats">
+        <div class="stat"><span class="muted">Pages</span><strong>@Pages</strong></div>
+        <div class="stat"><span class="muted">Posts</span><strong>@Posts</strong></div>
+        <div class="stat"><span class="muted">Drafts</span><strong>@Drafts</strong></div>
+        <div class="stat"><span class="muted">Active theme</span><strong style="font-size:17px">@ThemeName</strong></div>
+    </div>
+    @if (CreateGroups.Count > 0)
+    {
+        <div class="card">
+            <h2 style="margin-top:0">Create</h2>
+            <NewContentForm Groups="CreateGroups" DefaultGroupId="DefaultGroupId" />
+        </div>
+    }
+    <div class="card">
+        <h2 style="margin-top:0">Recently changed</h2>
+        <ContentTable Items="Recent" Groups="GroupNames" />
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public int Pages { get; set; }
+    [Parameter] public int Posts { get; set; }
+    [Parameter] public int Drafts { get; set; }
+    [Parameter] public string ThemeName { get; set; } = "";
+    [Parameter] public List<ContentItem> Recent { get; set; } = [];
+    [Parameter] public Dictionary<int, string> GroupNames { get; set; } = [];
+    [Parameter] public List<Group> CreateGroups { get; set; } = [];
+    [Parameter] public int? DefaultGroupId { get; set; }
+}

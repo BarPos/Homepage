@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <!-- Logic without UI: data model, permissions, blocks, themes, content, media, accounts, updates.
+         Migrations live in Homepage.Server. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>Homepage</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+        <PackageReference Include="Markdig" />
+        <PackageReference Include="HtmlSanitizer" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Homepage.Shared\Homepage.Shared.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <EmbeddedResource Include="Themes\BuiltIn\*.json" />
+    </ItemGroup>
+    <ItemGroup>
+        <InternalsVisibleTo Include="Homepage.Tests" />
+        <InternalsVisibleTo Include="Homepage.Web" />
+        <InternalsVisibleTo Include="Homepage.Server" />
+    </ItemGroup>
+</Project>

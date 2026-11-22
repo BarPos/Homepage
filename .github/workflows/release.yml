@@ -1,0 +1,87 @@
+# Adapted from DomainNotice (MIT), https://github.com/BarPos/DomainNotice
+# Release (run manually: Actions → release → Run workflow).
+# Runs the build workflow (tests, server tarballs), then creates the tag v<version> on the selected commit and
+# publishes a GitHub release with these assets:
+#   Homepage.Server-<version>-linux-x64.tar.gz, Homepage.Server-<version>-linux-arm64.tar.gz,
+#   install.sh, SHA256SUMS.txt
+# install.sh (GITHUB_REPOSITORY) and the server's updater (Updates:GitHubRepository) download from these releases.
+# The version is the one in Directory.Build.props and AppVersion.cs: bump both and commit before releasing.
+# Releases are not signed yet.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Mark as prerelease (servers on Updates:Channel=stable ignore it)"
+        type: boolean
+        default: false
+      draft:
+        description: "Create as a draft (publish it by hand later)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Tag must not exist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props | head -n1)"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "::error::tag v$version already exists: bump <Version> in Directory.Build.props and AppVersion.Current first"
+            exit 1
+          fi
+          echo "Releasing $version from ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build and test
+    needs: preflight
+    uses: ./.github/workflows/build.yml
+
+  release:
+    name: GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: assets
+          merge-multiple: true
+      - name: SHA256SUMS.txt over all assets
+        shell: bash
+        working-directory: assets
+        run: |
+          set -euo pipefail
+          v='${{ needs.build.outputs.version }}'
+          files=("Homepage.Server-$v-linux-x64.tar.gz" "Homepage.Server-$v-linux-arm64.tar.gz" install.sh)
+          for f in "${files[@]}"; do test -f "$f" || { echo "::error::missing asset $f"; exit 1; }; done
+          sha256sum "${files[@]}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create the release
+        shell: bash
+        working-directory: assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          v='${{ needs.build.outputs.version }}'
+          flags=()
+          [[ "${{ inputs.prerelease }}" == "true" ]] && flags+=(--prerelease)
+          [[ "${{ inputs.draft }}" == "true" ]] && flags+=(--draft)
+          gh release create "v$v" --target "$GITHUB_SHA" --title "Homepage $v" --generate-notes "${flags[@]}" \
+            "Homepage.Server-$v-linux-x64.tar.gz" "Homepage.Server-$v-linux-arm64.tar.gz" \
+            install.sh SHA256SUMS.txt

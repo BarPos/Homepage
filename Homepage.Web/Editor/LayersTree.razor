@@ -1,0 +1,7 @@
+<ul class="layers" data-parent="">
+    @foreach (var n in Tree.Blocks) { <LayerItem Node="n" /> }
+</ul>
+@if (Tree.Blocks.Count == 0) { <p class="muted small">Empty. Drag a block here.</p> }
+@code {
+    [Parameter, EditorRequired] public BlockTree Tree { get; set; } = default!;
+}

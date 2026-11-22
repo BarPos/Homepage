@@ -1,0 +1,62 @@
+<AdminShell Title="@Doc.Title" Full="true" BodyClass="editor">
+    <Scripts><script src="@Asset.Url("lib/Sortable.min.js")" defer></script><script src="@Asset.Url("js/editor.js")" defer></script></Scripts>
+    <ChildContent>
+    <div class="ed-bar" data-editor data-target="@Doc.Target" data-region="@Region" data-readonly="@(Doc.CanEdit ? null : "1")">
+        <a class="btn btn-sm" href="@BackUrl">← Back</a>
+        <span class="title">@Doc.Title</span>
+        @if (!Doc.CanEdit) { <span class="badge badge-warn">read-only</span> }
+        <span class="status-dot" id="ed-status" title="Saved"></span>
+        <span class="spacer"></span>
+        <div class="devices" role="group" aria-label="Preview width">
+            <button type="button" class="on" data-device="">Desktop</button>
+            <button type="button" data-device="tablet">Tablet</button>
+            <button type="button" data-device="phone">Phone</button>
+        </div>
+        @if (Doc.Target.Kind == EditorTarget.ContentKind)
+        {
+            <a class="btn btn-sm" href="/admin/content/@Doc.Target.Id">Settings</a>
+            @if (Doc.CanPublish)
+            {
+                <button type="button" class="btn-primary btn-sm" hx-post="/admin/content/@Doc.Target.Id/publish" hx-swap="none">Publish</button>
+            }
+        }
+    </div>
+    <div class="ed-main">
+        <aside class="ed-left">
+            @if (Doc.CanEdit)
+            {
+                <div class="ed-panel">
+                    <h3>Blocks</h3>
+                    <div class="help" style="margin-bottom:8px">Drag into the layers below, or click to add after the selected block.</div>
+                    @foreach (var cat in Palette.GroupBy(d => d.Category))
+                    {
+                        <div class="muted small" style="margin:8px 0 4px">@cat.Key</div>
+                        <ul class="palette">
+                            @foreach (var d in cat)
+                            {
+                                <li data-type="@d.Type" title="@d.Label"><span class="ic">@d.Icon</span>@d.Label</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            }
+            <div class="ed-panel">
+                <h3>Layers</h3>
+                <div id="layers"><LayersTree Tree="Doc.Tree" /></div>
+            </div>
+        </aside>
+        <section class="ed-canvas" id="ed-canvas">
+            <iframe id="canvas" title="Page canvas" src="/admin/editor/@Doc.Target/canvas"></iframe>
+        </section>
+        <aside class="ed-right">
+            <div class="ed-panel inspector" id="inspector"><div class="empty">Select a block to edit its settings.</div></div>
+        </aside>
+    </div>
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public EditorDocument Doc { get; set; } = default!;
+    [Parameter] public List<BlockDefinition> Palette { get; set; } = [];
+    [Parameter] public string BackUrl { get; set; } = "/admin";
+    private string Region => Doc.Target.Kind == EditorTarget.ContentKind ? "main" : Doc.Target.Kind;
+}

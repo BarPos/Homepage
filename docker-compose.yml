@@ -1,0 +1,22 @@
+# Development only. Production uses install.sh + systemd (see techstack.md section 8).
+#   docker compose up -d db        PostgreSQL 16 on 127.0.0.1:5433 (user/password/database: homepage / homepage-dev / homepage)
+#   docker compose --profile tools up -d   adds Adminer on http://127.0.0.1:8081
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: homepage
+      POSTGRES_PASSWORD: homepage-dev
+      POSTGRES_DB: homepage
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: [homepage-pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homepage"]
+      interval: 2s
+      retries: 30
+  adminer:
+    image: adminer:4
+    profiles: [tools]
+    ports: ["127.0.0.1:8081:8080"]
+volumes:
+  homepage-pg:

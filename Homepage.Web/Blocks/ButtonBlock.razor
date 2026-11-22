@@ -1,0 +1,7 @@
+@{ var p = Node.PropsAs<ButtonProps>(); var url = SafeUrlAttribute.IsSafe(p.Url) ? p.Url : "#"; }
+<p class="blk @Css.Align(p.Align)">
+    <a class="btn btn-@p.Style.ToString().ToLowerInvariant()" href="@url">@p.Text</a>
+</p>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+}

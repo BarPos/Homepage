@@ -1,0 +1,12 @@
+<CascadingValue Value="Ctx" IsFixed="true">
+    <SiteDocument Title="@(IsHome ? null : Item.Title)" Description="@Item.Excerpt" CanonicalUrl="@Canonical">
+        <BlockList Nodes="Tree.Blocks" Contain="true" />
+    </SiteDocument>
+</CascadingValue>
+@code {
+    [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
+    [Parameter, EditorRequired] public ContentItem Item { get; set; } = default!;
+    [Parameter, EditorRequired] public BlockTree Tree { get; set; } = default!;
+    [Parameter] public bool IsHome { get; set; }
+    private string? Canonical => string.IsNullOrEmpty(Ctx.Site.BaseUrl) ? null : Ctx.Site.BaseUrl.TrimEnd('/') + (IsHome ? "/" : "/" + Item.Slug);
+}

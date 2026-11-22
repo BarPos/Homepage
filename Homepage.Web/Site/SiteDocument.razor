@@ -1,0 +1,72 @@
+@* The whole public HTML document: theme CSS, header tree, main content, footer tree.
+   The editor canvas renders exactly this with Ctx.Edit = true for the edited region. *@
+<!DOCTYPE html>
+<html lang="en" data-backdrop="@Ctx.Theme.Tokens.Backdrop" data-glass="@GlassAttr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="@Ctx.Theme.Tokens.Light["bg"]" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="@Ctx.Theme.Tokens.Dark["bg"]" media="(prefers-color-scheme: dark)" />
+    <title>@(string.IsNullOrWhiteSpace(Title) ? Ctx.Site.Title : $"{Title} · {Ctx.Site.Title}")</title>
+    @if (!string.IsNullOrWhiteSpace(Description)) { <meta name="description" content="@Description" /> }
+    <meta property="og:title" content="@(Title ?? Ctx.Site.Title)" />
+    <meta property="og:site_name" content="@Ctx.Site.Title" />
+    @if (!string.IsNullOrWhiteSpace(Description)) { <meta property="og:description" content="@Description" /> }
+    @if (!string.IsNullOrWhiteSpace(CanonicalUrl)) { <link rel="canonical" href="@CanonicalUrl" /> }
+    <link rel="alternate" type="application/rss+xml" title="@Ctx.Site.Title" href="/feed.xml" />
+    @if (ThemeCssInline is not null)
+    {
+        <style id="hp-theme">@((MarkupString)ThemeCssInline)</style>
+    }
+    else
+    {
+        <link rel="stylesheet" href="@Ctx.Theme.CssUrl" />
+    }
+    <link rel="stylesheet" href="@Asset.Url("css/site.css")" />
+    @if (Ctx.Edit || Ctx.EditRegion != "main" || CanvasMode)
+    {
+        <link rel="stylesheet" href="@Asset.Url("css/canvas.css")" />
+    }
+    @if (UseHtmx)
+    {
+        <script src="@Asset.Url("lib/htmx.min.js")" defer></script>
+    }
+</head>
+<body class="@(CanvasMode ? "hp-canvas hp-edit-" + Ctx.EditRegion : "")">
+    <div class="site">
+        <header class="site-top" data-region="header">
+            <CascadingValue Value="Ctx.ForRegion(EditorTarget.HeaderKind)" IsFixed="true">
+                <BlockList Nodes="Ctx.Theme.Header.Blocks" />
+            </CascadingValue>
+        </header>
+        <main class="site-main" id="main" data-region="main">
+            <CascadingValue Value="@MainCtx" IsFixed="true">
+                @ChildContent
+            </CascadingValue>
+        </main>
+        <footer class="site-footer" data-region="footer">
+            <CascadingValue Value="Ctx.ForRegion(EditorTarget.FooterKind)" IsFixed="true">
+                <BlockList Nodes="Ctx.Theme.Footer.Blocks" />
+            </CascadingValue>
+        </footer>
+    </div>
+    @if (CanvasMode)
+    {
+        <script src="@Asset.Url("lib/Sortable.min.js")"></script>
+    }
+</body>
+</html>
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? CanonicalUrl { get; set; }
+    [Parameter] public bool UseHtmx { get; set; }
+    /// <summary>The editor canvas (loads Sortable; the parent editor page drives it).</summary>
+    [Parameter] public bool CanvasMode { get; set; }
+    /// <summary>Theme editor preview: tokens inline so unsaved values can be shown.</summary>
+    [Parameter] public string? ThemeCssInline { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+    private RenderContext MainCtx => Ctx.ForRegion("main");
+    private string GlassAttr => Ctx.Theme.Tokens.Glass ? "on" : "off";
+}

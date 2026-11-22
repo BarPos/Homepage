@@ -1,0 +1,32 @@
+<AdminShell Title="Menus" Section="menus">
+    <div class="grid2">
+        @foreach (var m in Menus)
+        {
+            var links = MenuService.Parse(m.Items).ToList();
+            <div class="card" x-data="{ rows: @RowsJson(links) }">
+                <h2 style="margin-top:0">@m.Name <span class="muted small">(@m.Key)</span></h2>
+                <form method="post" action="/admin/menus/@m.Key">
+                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                    <template x-for="(row, i) in rows" :key="i">
+                        <div class="form-row" style="grid-template-columns:1fr 1.4fr auto;margin-bottom:6px">
+                            <input type="text" name="label" x-model="row.label" placeholder="Label" />
+                            <input type="text" name="url" x-model="row.url" placeholder="/page or https://…" />
+                            <button type="button" class="btn-sm" x-on:click="rows.splice(i, 1)" title="Remove">✕</button>
+                        </div>
+                    </template>
+                    <div class="form-actions">
+                        <button type="button" x-on:click="rows.push({ label: '', url: '' })">Add link</button>
+                        <button class="btn-primary">Save menu</button>
+                    </div>
+                </form>
+            </div>
+        }
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public List<Menu> Menus { get; set; } = [];
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    private static string RowsJson(List<MenuLink> links) =>
+        System.Text.Json.JsonSerializer.Serialize(links.Select(l => new { label = l.Label, url = l.Url }));
+}

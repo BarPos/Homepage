@@ -1,0 +1,50 @@
+<AdminShell Title="Users & permissions" Section="access">
+    <AccessTabs Active="@(IsRoles ? "roles" : "groups")" />
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <p class="muted">
+        @if (IsRoles) { <text>Roles bundle group permissions. Give a role permissions under Roles ↔ Groups, and assign it to users under Users ↔ Roles.</text> }
+        else { <text>Every page, post and media file belongs to a group. System groups gate admin areas and cannot be renamed.</text> }
+    </p>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Name</th><th>Comment</th><th>Valid</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in Rows)
+                {
+                    <tr>
+                        <td colspan="4" style="padding:0">
+                            <form method="post" action="@(IsRoles ? "/admin/roles" : "/admin/groups")" class="form-row" style="grid-template-columns:1fr 2fr auto auto;align-items:center;padding:6px 10px;margin:0">
+                                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                                <input type="hidden" name="id" value="@r.Id" />
+                                <div><input type="text" name="name" value="@r.Name" readonly="@r.IsSystem" maxlength="100" />@if (r.IsSystem) { <span class="badge small">system</span> }</div>
+                                <input type="text" name="comment" value="@r.Comment" maxlength="500" />
+                                <label class="inline"><input type="checkbox" name="valid" value="true" checked="@r.Valid" disabled="@r.IsSystem" />@if (r.IsSystem) { <input type="hidden" name="valid" value="true" /> } valid</label>
+                                <button class="btn-sm">Save</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                <tr>
+                    <td colspan="4" style="padding:0">
+                        <form method="post" action="@(IsRoles ? "/admin/roles" : "/admin/groups")" class="form-row" style="grid-template-columns:1fr 2fr auto auto;align-items:center;padding:6px 10px;margin:0">
+                            <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                            <input type="text" name="name" placeholder="@(IsRoles ? "New role" : "new-group")" required maxlength="100" />
+                            <input type="text" name="comment" placeholder="Comment" maxlength="500" />
+                            <input type="hidden" name="valid" value="true" />
+                            <span></span>
+                            <button class="btn-primary btn-sm">Add</button>
+                        </form>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</AdminShell>
+@code {
+    public sealed record Row(int Id, string Name, string Comment, bool Valid, bool IsSystem);
+    [Parameter] public List<Row> Rows { get; set; } = [];
+    [Parameter] public bool IsRoles { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

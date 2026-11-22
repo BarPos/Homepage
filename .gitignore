@@ -1,0 +1,47 @@
+# ---- .NET build output
+bin/
+obj/
+/packages/
+*.nupkg
+TestResults/
+*.trx
+coverage*/
+*.coverage
+*.coveragexml
+
+# ---- IDEs and OS files
+.idea/
+.vs/
+.vscode/
+*.user
+*.suo
+riderModule.iml
+/_ReSharper.Caches/
+*.DotSettings.user
+.DS_Store
+Thumbs.db
+
+# ---- Release output (build/build-server.sh)
+artifacts/
+
+# ---- Local development data and secrets (never commit keys, certificates or passwords)
+.devdata/
+.env
+*.env.local
+*.pfx
+*.p12
+*.key
+appsettings.*.local.json
+secrets*.conf
+*.log
+
+# ---- Agent tooling
+.claude/
+
+# ---- GitHub Pages / Jekyll (docs/)
+docs/_site/
+docs/.jekyll-cache/
+docs/.jekyll-metadata
+docs/.sass-cache/
+docs/vendor/
+docs/Gemfile.lock

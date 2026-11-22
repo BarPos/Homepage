@@ -1,0 +1,17 @@
+<CascadingValue Value="Ctx" IsFixed="true">
+    <SiteDocument Title="Theme preview" ThemeCssInline="@Css">
+        @if (Tree.Blocks.Count > 0)
+        {
+            <BlockList Nodes="Tree.Blocks" Contain="true" />
+        }
+        else
+        {
+            <section class="sec sec-hero pad-xl bg-surface-alt"><div class="container"><h1 class="blk">Theme preview</h1><p class="blk">Body text in the theme's font.</p><p class="blk"><a class="btn btn-primary" href="#">Primary button</a> <a class="btn btn-outline" href="#">Outline</a></p></div></section>
+        }
+    </SiteDocument>
+</CascadingValue>
+@code {
+    [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
+    [Parameter, EditorRequired] public BlockTree Tree { get; set; } = default!;
+    [Parameter] public string Css { get; set; } = "";
+}

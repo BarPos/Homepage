@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+    <!-- Server-rendered UI: block renderers, public site, admin, visual editor. Static Razor components only
+         (no render modes, no SignalR). Static files are served from _content/Homepage.Web/. -->
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>Homepage.Web</RootNamespace>
+        <AddRazorSupportForMvc>false</AddRazorSupportForMvc>
+    </PropertyGroup>
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Homepage.Core\Homepage.Core.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <InternalsVisibleTo Include="Homepage.Tests" />
+        <InternalsVisibleTo Include="Homepage.Server" />
+    </ItemGroup>
+</Project>

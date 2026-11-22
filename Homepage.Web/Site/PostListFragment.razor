@@ -1,0 +1,27 @@
+@* Also returned alone for htmx "load more" and live search. *@
+<div id="post-list">
+    @if (Posts.Count == 0)
+    {
+        <p class="muted">Nothing found.</p>
+    }
+    <ul class="posts">
+        @foreach (var post in Posts)
+        {
+            <li class="post-card">
+                <h3><a href="@(post.Type == ContentType.Post ? "/blog/" + post.Slug : "/" + post.Slug)">@post.Title</a></h3>
+                <div class="post-meta">@post.PublishedAtUtc?.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)</div>
+                @if (!string.IsNullOrWhiteSpace(post.Excerpt)) { <p>@post.Excerpt</p> }
+            </li>
+        }
+    </ul>
+    @if (NextSkip is { } next)
+    {
+        <div class="pager" id="pager">
+            <a class="btn btn-outline" href="/blog?skip=@next" hx-get="/blog?skip=@next" hx-select="#post-list" hx-target="#post-list" hx-swap="outerHTML">Load more</a>
+        </div>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public List<ContentItem> Posts { get; set; } = [];
+    [Parameter] public int? NextSkip { get; set; }
+}

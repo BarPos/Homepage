@@ -1,0 +1,21 @@
+@inject MenuService Menus
+@{ var p = Node.PropsAs<SiteHeaderProps>(); }
+<div class="site-header">
+    <div class="container">
+        <a class="site-brand" href="/">
+            <strong>@Ctx.Site.Title</strong>
+            @if (p.ShowTagline && !string.IsNullOrWhiteSpace(Ctx.Site.Tagline)) { <span>@Ctx.Site.Tagline</span> }
+        </a>
+        <nav aria-label="Main">
+            <ul class="menu">
+                @foreach (var link in _links) { <li><a href="@link.Url">@link.Label</a></li> }
+            </ul>
+        </nav>
+    </div>
+</div>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+    private IReadOnlyList<MenuLink> _links = [];
+    protected override async Task OnInitializedAsync() => _links = await Menus.GetLinksAsync(Node.PropsAs<SiteHeaderProps>().MenuKey);
+}

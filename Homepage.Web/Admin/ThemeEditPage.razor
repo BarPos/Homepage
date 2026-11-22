@@ -1,0 +1,95 @@
+@{ var t = Tokens; }
+<AdminShell Title="@($"Theme: {Theme.Name}")" Section="themes" ShowTitle="false">
+    <Scripts><script src="@Asset.Url("js/theme-editor.js")" defer></script></Scripts>
+    <ChildContent>
+    <div class="toolbar"><a class="btn btn-sm" href="/admin/themes">← Themes</a><strong>@Theme.Name</strong>@if (Theme.IsActive) { <span class="badge badge-ok">Active</span> }<span class="spacer"></span><span class="muted small">Preview updates as you change values; nothing is live until you save.</span></div>
+    <div class="theme-ed">
+        <form id="theme-form" hx-post="/admin/themes/@Theme.Id" hx-swap="none">
+            <div class="card">
+                <label for="tn">Name</label>
+                <input id="tn" name="name" type="text" value="@Theme.Name" maxlength="100" required />
+                <label for="cm">Color mode</label>
+                <select id="cm" name="colorMode" data-preview>
+                    <option value="auto" selected="@(t.ColorMode == "auto")">Follow the visitor's system</option>
+                    <option value="light" selected="@(t.ColorMode == "light")">Always light</option>
+                    <option value="dark" selected="@(t.ColorMode == "dark")">Always dark</option>
+                </select>
+            </div>
+            @foreach (var scheme in new[] { "light", "dark" })
+            {
+                var colors = scheme == "light" ? t.Light : t.Dark;
+                <div class="card" data-scheme="@scheme">
+                    <h3 style="margin-top:0">@(scheme == "light" ? "Light colors" : "Dark colors")</h3>
+                    @foreach (var (key, label) in ThemeTokens.AllColors)
+                    {
+                        <div class="color-row">
+                            <span>@label</span>
+                            <input type="color" name="@($"{scheme}.{key}")" value="@colors[key]" data-preview data-color="@key" data-scheme="@scheme" aria-label="@label" />
+                            <span class="contrast small" data-contrast="@($"{scheme}.{key}")"></span>
+                        </div>
+                    }
+                </div>
+            }
+            <div class="card">
+                <h3 style="margin-top:0">Typography</h3>
+                @foreach (var (field, label, value) in new[] { ("bodyFont", "Body font", t.BodyFont), ("headingFont", "Heading font", t.HeadingFont) })
+                {
+                    <label for="@field">@label</label>
+                    <select id="@field" name="@field" data-preview>
+                        @foreach (var (key, f) in ThemeTokens.Fonts) { <option value="@key" data-stack="@f.Stack" selected="@(key == value)">@f.Label</option> }
+                    </select>
+                }
+                <label for="bs">Base size <span class="muted" data-out="baseSize">@t.BaseSize px</span></label>
+                <input id="bs" type="range" name="baseSize" min="12" max="24" step="0.5" value="@Num(t.BaseSize)" data-preview />
+                <label for="sc">Heading scale <span class="muted" data-out="scale">@t.Scale</span></label>
+                <input id="sc" type="range" name="scale" min="1.05" max="1.6" step="0.01" value="@Num(t.Scale)" data-preview />
+                <label for="lh">Line height <span class="muted" data-out="lineHeight">@t.LineHeight</span></label>
+                <input id="lh" type="range" name="lineHeight" min="1.1" max="2.2" step="0.05" value="@Num(t.LineHeight)" data-preview />
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0">Shape and spacing</h3>
+                <label for="rd">Corner radius <span class="muted" data-out="radius">@t.Radius px</span></label>
+                <input id="rd" type="range" name="radius" min="0" max="32" step="1" value="@Num(t.Radius)" data-preview />
+                <label for="sp">Spacing <span class="muted" data-out="spacingUnit">@t.SpacingUnit</span></label>
+                <input id="sp" type="range" name="spacingUnit" min="0.5" max="2" step="0.05" value="@Num(t.SpacingUnit)" data-preview />
+                <label for="cw">Content width <span class="muted" data-out="containerWidth">@t.ContainerWidth px</span></label>
+                <input id="cw" type="range" name="containerWidth" min="600" max="1600" step="10" value="@t.ContainerWidth" data-preview />
+                <label for="sh">Shadows</label>
+                <select id="sh" name="shadow" data-preview>
+                    @foreach (var s in new[] { "none", "soft", "strong" }) { <option value="@s" selected="@(s == t.Shadow)">@s</option> }
+                </select>
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0">Glass and backdrop</h3>
+                <label class="inline"><input type="checkbox" name="glass" value="true" checked="@t.Glass" data-preview /> Frosted glass surfaces</label>
+                <div class="help">Header, cards, quotes and glass sections become translucent and blur what is behind them.</div>
+                <label for="gb">Blur <span class="muted" data-out="glassBlur">@t.GlassBlur px</span></label>
+                <input id="gb" type="range" name="glassBlur" min="0" max="40" step="1" value="@Num(t.GlassBlur)" data-preview />
+                <label for="go">Opacity <span class="muted" data-out="glassOpacity">@t.GlassOpacity</span></label>
+                <input id="go" type="range" name="glassOpacity" min="0.3" max="0.95" step="0.01" value="@Num(t.GlassOpacity)" data-preview />
+                <label for="bd">Page backdrop</label>
+                <select id="bd" name="backdrop" data-preview>
+                    @foreach (var (key, label) in ThemeTokens.Backdrops) { <option value="@key" selected="@(key == t.Backdrop)">@label</option> }
+                </select>
+                <div class="help">Soft fields of the primary and accent colors behind the page. Glass looks best over a backdrop.</div>
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0">Custom CSS</h3>
+                <textarea name="customCss" rows="8" placeholder=".site-header { … }">@Theme.CustomCss</textarea>
+                <div class="help">@@import and url() pointing to other sites are removed. Applied after saving.</div>
+            </div>
+            <div class="form-actions" style="position:sticky;bottom:0;background:var(--bg);padding:10px 0">
+                <button class="btn-primary" type="submit">Save theme</button>
+                <a class="btn" href="/admin/editor/header-@Theme.Id">Edit header</a>
+                <a class="btn" href="/admin/editor/footer-@Theme.Id">Edit footer</a>
+            </div>
+        </form>
+        <iframe id="theme-preview" title="Theme preview" src="/admin/themes/@Theme.Id/preview"></iframe>
+    </div>
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public Theme Theme { get; set; } = default!;
+    private ThemeTokens Tokens => ThemeTokens.Parse(Theme.Tokens);
+    private static string Num(double d) => d.ToString("0.###", CultureInfo.InvariantCulture);
+}

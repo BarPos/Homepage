@@ -1,0 +1,28 @@
+@inject PublicContent Content
+@{ var p = Node.PropsAs<PostListProps>(); }
+<div class="blk">
+    @if (_posts is { Count: > 0 })
+    {
+        <ul class="posts @(p.Layout == PostListLayout.Grid ? "posts-grid" : "")">
+            @foreach (var post in _posts)
+            {
+                <li class="post-card">
+                    <h3><a href="/blog/@post.Slug">@post.Title</a></h3>
+                    <div class="post-meta">@post.PublishedAtUtc?.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)</div>
+                    @if (p.ShowExcerpt && !string.IsNullOrWhiteSpace(post.Excerpt)) { <p>@post.Excerpt</p> }
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <p class="muted">No posts yet.</p>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    private List<ContentItem>? _posts;
+
+    protected override async Task OnInitializedAsync() =>
+        _posts = await Content.LatestPostsAsync(Math.Clamp(Node.PropsAs<PostListProps>().Count, 1, 50));
+}

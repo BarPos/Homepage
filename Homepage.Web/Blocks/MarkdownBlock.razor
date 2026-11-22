@@ -1,0 +1,14 @@
+@inject MarkdownRenderer Markdown
+@{ var p = Node.PropsAs<MarkdownProps>(); }
+@if (string.IsNullOrWhiteSpace(p.Markdown))
+{
+    @if (Ctx.Edit) { <div class="blk prose hp-placeholder">Empty text block: select it and write in the panel on the right.</div> }
+}
+else
+{
+    <div class="blk prose">@((MarkupString)Markdown.ToHtml(p.Markdown))</div>
+}
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+}

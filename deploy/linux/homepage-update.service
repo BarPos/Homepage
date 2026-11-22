@@ -1,0 +1,14 @@
+# Adapted from DomainNotice (MIT), https://github.com/BarPos/DomainNotice
+# Applies a staged Homepage update. One-shot, as root, in its own unit, so it keeps running while it
+# stops and starts homepage.service. Runs the root-owned copy installed by install.sh, never a script from the
+# package being installed.
+[Unit]
+Description=Apply a staged Homepage update
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/homepage/bin/update.sh
+# The download is already done; this covers unpacking, pg_dump, migrations and the 2-minute health check.
+TimeoutStartSec=1h

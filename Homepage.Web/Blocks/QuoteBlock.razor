@@ -1,0 +1,8 @@
+@{ var p = Node.PropsAs<QuoteProps>(); }
+<blockquote class="blk quote">
+    <p>@p.Text</p>
+    @if (!string.IsNullOrWhiteSpace(p.Cite)) { <cite>— @p.Cite</cite> }
+</blockquote>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+}
