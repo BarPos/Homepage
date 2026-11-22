@@ -24,6 +24,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<AuditEntry> AuditLog => Set<AuditEntry>();
     public DbSet<UpdateRun> UpdateRuns => Set<UpdateRun>();
     public DbSet<Analytics.PageView> PageViews => Set<Analytics.PageView>();
+    public DbSet<Forms.Form> Forms => Set<Forms.Form>();
+    public DbSet<Forms.FormSubmission> FormSubmissions => Set<Forms.FormSubmission>();
+    public DbSet<Mail.EmailTemplate> EmailTemplates => Set<Mail.EmailTemplate>();
+    public DbSet<Mail.MailingList> MailingLists => Set<Mail.MailingList>();
+    public DbSet<Mail.Subscriber> Subscribers => Set<Mail.Subscriber>();
+    public DbSet<Mail.Campaign> Campaigns => Set<Mail.Campaign>();
+    public DbSet<Mail.OutboxMessage> Outbox => Set<Mail.OutboxMessage>();
     public DbSet<Analytics.AnalyticsSalt> AnalyticsSalts => Set<Analytics.AnalyticsSalt>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -186,6 +193,71 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             e.Property(p => p.Os).HasMaxLength(40);
             e.Property(p => p.Device).HasMaxLength(20);
             e.Property(p => p.PageKey).HasMaxLength(40);
+        });
+        b.Entity<Forms.Form>(e =>
+        {
+            e.ToTable("forms");
+            e.Property(f => f.Name).HasMaxLength(100);
+            e.Property(f => f.Fields).HasColumnType("jsonb");
+            e.Property(f => f.SubmitLabel).HasMaxLength(60);
+            e.Property(f => f.SuccessMessage).HasMaxLength(2000);
+            e.Property(f => f.SuccessUrl).HasMaxLength(1000);
+            e.Property(f => f.NotifyEmails).HasMaxLength(1000);
+            e.Property(f => f.ConsentFieldKey).HasMaxLength(40);
+            e.HasOne<Mail.MailingList>().WithMany().HasForeignKey(f => f.MailingListId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<Forms.FormSubmission>(e =>
+        {
+            e.ToTable("form_submissions");
+            e.Property(s => s.Data).HasColumnType("jsonb");
+            e.Property(s => s.PageUrl).HasMaxLength(300);
+            e.HasIndex(s => new { s.FormId, s.AtUtc });
+            e.HasOne<Forms.Form>().WithMany().HasForeignKey(s => s.FormId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<Mail.EmailTemplate>(e =>
+        {
+            e.ToTable("email_templates");
+            e.Property(t => t.Key).HasMaxLength(60);
+            e.Property(t => t.Name).HasMaxLength(100);
+            e.Property(t => t.Subject).HasMaxLength(200);
+            e.HasIndex(t => t.Key).IsUnique().HasFilter("\"Key\" IS NOT NULL");
+        });
+        b.Entity<Mail.MailingList>(e =>
+        {
+            e.ToTable("mailing_lists");
+            e.Property(l => l.Name).HasMaxLength(100);
+            e.Property(l => l.Description).HasMaxLength(500);
+        });
+        b.Entity<Mail.Subscriber>(e =>
+        {
+            e.ToTable("subscribers");
+            e.Property(s => s.Email).HasMaxLength(254);
+            e.Property(s => s.Name).HasMaxLength(100);
+            e.Property(s => s.Token).HasMaxLength(64);
+            e.Property(s => s.Source).HasMaxLength(100);
+            e.HasIndex(s => new { s.ListId, s.Email }).IsUnique();
+            e.HasIndex(s => s.Token).IsUnique();
+            e.HasOne<Mail.MailingList>().WithMany().HasForeignKey(s => s.ListId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<Mail.Campaign>(e =>
+        {
+            e.ToTable("campaigns");
+            e.Property(c => c.Subject).HasMaxLength(200);
+            e.Property(c => c.CreatedBy).HasMaxLength(200);
+            e.HasOne<Mail.MailingList>().WithMany().HasForeignKey(c => c.ListId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<Mail.OutboxMessage>(e =>
+        {
+            e.ToTable("mail_outbox");
+            e.Property(m => m.To).HasMaxLength(254);
+            e.Property(m => m.ToName).HasMaxLength(200);
+            e.Property(m => m.Subject).HasMaxLength(200);
+            e.Property(m => m.ReplyTo).HasMaxLength(254);
+            e.Property(m => m.UnsubscribeUrl).HasMaxLength(500);
+            e.Property(m => m.Kind).HasMaxLength(60);
+            e.Property(m => m.Error).HasMaxLength(500);
+            e.HasIndex(m => new { m.Status, m.NextAttemptAtUtc });
+            e.HasIndex(m => m.CampaignId);
         });
         b.Entity<Analytics.AnalyticsSalt>(e =>
         {

@@ -75,6 +75,23 @@
       if (form.requestSubmit) form.requestSubmit(); else form.submit();
     });
   }, true);
+  // A single button with data-confirm (e.g. "Delete" next to "Mark as read" in one form) asks only for itself.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest && e.target.closest("button[data-confirm]");
+    if (!btn || !btn.form) return;
+    if (btn.dataset.confirmed === "1") { delete btn.dataset.confirmed; return; }
+    e.preventDefault();
+    hpConfirm({
+      title: btn.dataset.confirmTitle || "Are you sure?",
+      message: btn.dataset.confirm,
+      button: btn.dataset.confirmButton || "Continue",
+      danger: "confirmDanger" in btn.dataset,
+    }).then((ok) => {
+      if (!ok) return;
+      btn.dataset.confirmed = "1";
+      btn.click();
+    });
+  });
   document.addEventListener("change", (e) => {
     if (e.target.matches && e.target.matches("select[data-autosubmit]")) e.target.form.submit();
   });

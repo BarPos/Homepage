@@ -1,0 +1,50 @@
+@using Homepage.Mail
+<AdminShell Title="Mail" Section="mail" Subtitle="Email from this site: answers to forms, newsletters and account notices.">
+    <MailTabs Active="sent" />
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    <div class="card">
+        <h2 class="card-title">Emails to lists</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Sent</th><th>Subject</th><th>List</th><th>By</th><th>Progress</th></tr></thead>
+                <tbody>
+                    @foreach (var c in Campaigns)
+                    {
+                        var (sent, pending, failed) = Progress.GetValueOrDefault(c.Id);
+                        <tr>
+                            <td class="nowrap muted">@c.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
+                            <td><details class="campaign"><summary>@c.Subject</summary><pre class="code">@c.Body</pre></details></td>
+                            <td>@(ListNames.GetValueOrDefault(c.ListId) ?? "(deleted list)")</td>
+                            <td class="muted small">@c.CreatedBy</td>
+                            <td class="nowrap">
+                                @if (pending > 0) { <span class="badge">@sent of @c.Recipients sent</span> }
+                                else { <span class="badge badge-ok">sent to @c.Recipients</span> }
+                                @if (failed > 0) { <span class="badge badge-warn">@failed failed</span> }
+                            </td>
+                        </tr>
+                    }
+                    @if (Campaigns.Count == 0) { <tr><td colspan="5" class="muted">Nothing sent to a list yet.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <h2 class="section-title">Outbox</h2>
+    <form class="toolbar filters" method="get" action="/admin/mail/sent">
+        <select name="status" aria-label="Status" data-autosubmit>
+            <option value="">All emails</option>
+            @foreach (var s in Enum.GetValues<OutboxStatus>()) { <option value="@s" selected="@(Url["status"] == s.ToString())">@(s switch { OutboxStatus.Pending => "Waiting", OutboxStatus.Sent => "Sent", _ => "Failed" })</option> }
+        </select>
+    </form>
+    <div id="list">
+        <OutboxTable Items="Outbox.Items" />
+        <Pager Url="Url" Page="Outbox.Page" TotalPages="Outbox.TotalPages" Total="Outbox.Total" From="Outbox.From" To="Outbox.To" />
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public List<Campaign> Campaigns { get; set; } = [];
+    [Parameter] public Dictionary<int, (int Sent, int Pending, int Failed)> Progress { get; set; } = [];
+    [Parameter] public Dictionary<int, string> ListNames { get; set; } = [];
+    [Parameter, EditorRequired] public PagedResult<OutboxMessage> Outbox { get; set; } = default!;
+    [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
+    [Parameter] public string? Message { get; set; }
+}

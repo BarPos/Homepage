@@ -59,7 +59,8 @@ never used for content.
 | `themes` | See themes and previews | Activate, duplicate and edit themes; custom CSS |
 | `layout` | See themes and previews | Header, footer, menus and blogs |
 | `html` | — | Use the raw HTML block |
-| `forms` | — | Reserved for form submissions (not built yet) |
+| `forms` | Read form answers | Build forms, export and delete answers |
+| `mail` | See the outbox, lists, templates and system emails | Change lists, subscribers, templates and system emails; send to lists |
 | `audit` | Read the audit log | — |
 | `analytics` | See visitor statistics | Change analytics settings, delete the data |
 

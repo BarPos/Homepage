@@ -19,11 +19,15 @@ public static class Seeder
         var changed = false;
 
         foreach (var (name, comment) in SystemGroups.All)
-            if (!await db.Groups.AnyAsync(g => g.Name == name, ct))
+        {
+            var existing = await db.Groups.FirstOrDefaultAsync(g => g.Name == name, ct);
+            if (existing is null)
             {
                 db.Groups.Add(new Group { Name = name, Comment = comment, IsSystem = true, CreatedAtUtc = now });
                 changed = true;
             }
+            else if (existing.IsSystem && existing.Comment != comment) { existing.Comment = comment; changed = true; } // what the group allows, as of this version
+        }
         var firstRun = !await db.Groups.AnyAsync(g => !g.IsSystem, ct) && !await db.ContentItems.AnyAsync(ct);
         if (firstRun && !await db.Groups.AnyAsync(g => g.Name == SystemGroups.Content, ct))
         {

@@ -1,0 +1,44 @@
+@using Homepage.Forms
+@{
+    var data = FormService.ParseData(Submission.Data);
+    var fields = FormField.Parse(Form.Fields);
+    // Answers to fields that were removed from the form since are still shown, under their key.
+    var extra = data.Select(kv => kv.Key).Where(k => fields.All(f => f.Key != k)).ToList();
+    var email = fields.Where(f => f.Type == FieldType.Email).Select(f => FormService.Text(data[f.Key])).FirstOrDefault(Homepage.Mail.MailAddresses.IsValid);
+}
+<AdminShell Title="@($"Answer from {Submission.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}")" Section="forms" Back="@($"/admin/forms/{Form.Id}/submissions")" BackText="@Form.Name">
+    <Actions>
+        @if (email is not null) { <a class="btn btn-primary" href="mailto:@email">Reply by email</a> }
+        <form method="post" action="/admin/forms/@Form.Id/submissions/bulk">
+            <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+            <input type="hidden" name="id" value="@Submission.Id" />
+            <button class="btn" name="action" value="unread">Mark as new</button>
+            @if (CanWrite) { <button class="btn-danger" name="action" value="delete" data-confirm="This cannot be undone." data-confirm-title="Delete this answer?" data-confirm-button="Delete" data-confirm-danger>Delete</button> }
+        </form>
+    </Actions>
+    <ChildContent>
+    <div class="card">
+        <dl class="answers">
+            @foreach (var f in fields)
+            {
+                var t = FormService.Text(data[f.Key]);
+                <dt>@f.Label</dt>
+                <dd class="@(t.Length == 0 ? "muted" : null)">@(t.Length == 0 ? "(empty)" : t)</dd>
+            }
+            @foreach (var k in extra)
+            {
+                <dt>@k <span class="muted small">(field removed)</span></dt>
+                <dd>@FormService.Text(data[k])</dd>
+            }
+        </dl>
+        <p class="muted small" style="margin:16px 0 0">Sent @(Submission.PageUrl.Length > 0 ? "from " + Submission.PageUrl : "") at @Submission.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture).</p>
+    </div>
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public Form Form { get; set; } = default!;
+    [Parameter, EditorRequired] public FormSubmission Submission { get; set; } = default!;
+    [Parameter] public bool CanWrite { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

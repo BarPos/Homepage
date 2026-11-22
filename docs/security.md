@@ -97,6 +97,22 @@ nav_order: 7
 - Reports and CSV exports need `analytics: ro`; dimensions and filters come from a fixed list, never from SQL text.
   Exported values that start with `=`, `+`, `-` or `@` are quoted so spreadsheets do not run them as formulas.
 
+## Forms and email
+
+- Public forms and the sign-up block carry a signed token (ASP.NET Core Data Protection) with the time the form was
+  shown, and a hidden trap field; too-fast, expired, foreign or trapped submissions are refused or dropped. They are
+  rate limited to 10 a minute per network and limited in size. There is no captcha, so a determined sender can still
+  send junk at that rate.
+- Answers are checked against the form's fields on the server (types, choices, lengths); unknown fields are ignored.
+- In emails, values from visitors are escaped before the Markdown is rendered, so they cannot add links, images or
+  HTML. Only the site's own links (`….url` placeholders) are inserted as they are. The page a form was sent from is
+  kept as a path of safe characters only.
+- Confirm and unsubscribe links carry a random 192-bit token per subscriber. Opening a link only shows a page;
+  confirming needs a button press (POST), so mail scanners that open links do not subscribe anyone. The sign-up block
+  gives the same answer for known and unknown addresses.
+- The SMTP password is read from the configuration only and never shown in the admin. TLS is used whenever the server
+  offers it (`Mail:Security=Auto`).
+
 ## Browser headers
 
 | Header | Public site | Admin |

@@ -56,6 +56,7 @@ public static class SystemGroups
     public const string Forms = "forms";
     public const string Audit = "audit";
     public const string Analytics = "analytics";
+    public const string Mail = "mail";
     /// <summary>Default content group (not a system group; it can be renamed or made invalid).</summary>
     public const string Content = "content";
 
@@ -65,8 +66,9 @@ public static class SystemGroups
         (Themes, "ro: view themes. rw: edit, activate themes and custom CSS."),
         (Layout, "rw: header, footer and menus."),
         (Html, "rw: use the raw HTML block."),
-        (Forms, "ro: view form submissions. rw: export and delete them."),
+        (Forms, "ro: view forms and their submissions. rw: build forms, export and delete submissions."),
         (Audit, "ro: view the audit log."),
         (Analytics, "ro: view visitor statistics. rw: change analytics settings and delete the data."),
+        (Mail, "ro: view mailing lists, subscribers and sent mail. rw: manage lists and email templates, send email to lists."),
     ];
 }

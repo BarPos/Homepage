@@ -1,0 +1,50 @@
+@using Homepage.Forms
+<AdminShell Title="Forms" Section="forms" Subtitle="Contact forms, sign-ups, surveys: build them here, then put them on a page with a Form block.">
+    <Actions>@if (CanWrite) { <a class="btn btn-primary" href="/admin/forms/new">New form</a> }</Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    @if (!MailReady) { <div class="inline-alert warn">Email is not set up, so nobody is told about new answers by email. They are still kept here. See <a href="/admin/mail">Mail</a>.</div> }
+    @if (Forms.Count == 0)
+    {
+        <div class="card empty-state">
+            <h2>No forms yet</h2>
+            <p class="muted">A contact form takes a minute: name, email, message.</p>
+            @if (CanWrite) { <a class="btn btn-primary" href="/admin/forms/new">New form</a> }
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Form</th><th>Fields</th><th>Answers</th><th>Sends to</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var f in Forms)
+                    {
+                        var (total, unread) = Counts.GetValueOrDefault(f.Id);
+                        var fields = FormField.Parse(f.Fields);
+                        <tr>
+                            <td><a href="/admin/forms/@f.Id/submissions"><strong>@f.Name</strong></a>@if (!f.Enabled) { <span class="badge badge-off">closed</span> }</td>
+                            <td class="muted">@string.Join(" · ", fields.Take(5).Select(x => x.Label))@(fields.Count > 5 ? $" and {fields.Count - 5} more" : "")</td>
+                            <td class="nowrap"><a href="/admin/forms/@f.Id/submissions">@total</a>@if (unread > 0) { <span class="badge badge-ok">@unread new</span> }</td>
+                            <td class="muted small">@(f.NotifyEmails.Length > 0 ? f.NotifyEmails : "nobody (only kept here)")</td>
+                            <td class="right nowrap">
+                                <a class="btn btn-sm" href="/admin/forms/@f.Id/submissions">Answers</a>
+                                @if (CanWrite) { <a class="btn btn-sm" href="/admin/forms/@f.Id">Edit</a> }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter] public List<Form> Forms { get; set; } = [];
+    [Parameter] public Dictionary<int, (int Total, int Unread)> Counts { get; set; } = [];
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public bool MailReady { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+}

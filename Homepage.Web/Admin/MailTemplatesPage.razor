@@ -1,0 +1,60 @@
+@using Homepage.Mail
+<AdminShell Title="Mail" Section="mail" Subtitle="Email from this site: answers to forms, newsletters and account notices.">
+    <MailTabs Active="@(System ? "system" : "templates")" />
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    @if (System)
+    {
+        <p class="intro muted">The emails the site sends by itself. Change their text, or turn one off.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Email</th><th>Subject</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var e in SystemEmails.All)
+                    {
+                        var t = Templates.FirstOrDefault(x => x.Key == e.Key);
+                        <tr>
+                            <td>@if (CanWrite) { <a href="/admin/mail/system/@e.Key"><strong>@e.Name</strong></a> } else { <strong>@e.Name</strong> }<div class="muted small">@e.Description</div></td>
+                            <td class="muted">@(t?.Subject ?? e.Subject)</td>
+                            <td class="nowrap">
+                                @if (t is { Enabled: false }) { <span class="badge badge-off">off</span> } else { <span class="badge badge-ok">on</span> }
+                                @if (t is not null) { <span class="badge">edited</span> }
+                            </td>
+                            <td class="right">@if (CanWrite) { <a class="btn btn-sm" href="/admin/mail/system/@e.Key">Edit</a> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="toolbar"><p class="muted" style="margin:0">Ready-made emails to start from when you send to a list.</p><span class="spacer"></span>@if (CanWrite) { <a class="btn btn-primary" href="/admin/mail/templates/new">New template</a> }</div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Template</th><th>Subject</th><th>Changed</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in Templates.Where(x => x.Key is null))
+                    {
+                        <tr>
+                            <td>@if (CanWrite) { <a href="/admin/mail/templates/@t.Id"><strong>@t.Name</strong></a> } else { <strong>@t.Name</strong> }</td>
+                            <td class="muted">@t.Subject</td>
+                            <td class="muted small nowrap">@t.UpdatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                            <td class="right nowrap">
+                                @if (CanWrite) { <a class="btn btn-sm" href="/admin/mail/send?template=@t.Id">Use</a> <a class="btn btn-sm" href="/admin/mail/templates/@t.Id">Edit</a> }
+                            </td>
+                        </tr>
+                    }
+                    @if (!Templates.Any(x => x.Key is null)) { <tr><td colspan="4" class="muted">No templates yet.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    }
+</AdminShell>
+@code {
+    [Parameter] public bool System { get; set; }
+    [Parameter] public List<EmailTemplate> Templates { get; set; } = [];
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+}

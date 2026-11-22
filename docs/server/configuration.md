@@ -77,6 +77,33 @@ Relative paths are resolved against the program folder.
 The other analytics settings (on or off, country lookup, how long to keep visits, time zone) are in the admin
 (see [Analytics](../admin/analytics.md)).
 
+## Mail
+
+The SMTP server for every email the site sends ([forms](../admin/forms.md), [mailing lists](../admin/mail.md), account
+notices). Without `Host` and `FromAddress`, emails wait in the outbox.
+
+| Key | Default | |
+|---|---|---|
+| `Host` | — | SMTP server, e.g. `smtp.example.com` |
+| `Port` | `587` | `587` (STARTTLS), `465` (TLS from the start) or `25` |
+| `Security` | `Auto` | `Auto` (TLS on 465, STARTTLS when offered otherwise), `StartTls`, `SslOnConnect`, `None` |
+| `Username`, `Password` | — | Sign-in, when the server needs one. Never shown in the admin. |
+| `FromAddress` | — | The sender, e.g. `site@example.com`. Use an address your SMTP server may send for (SPF, DKIM). |
+| `FromName` | — | Shown as the sender's name, e.g. `My website` |
+| `MaxPerMinute` | `60` | Sending speed; lower it for providers with hourly limits |
+
+In `/opt/homepage/config/appsettings.Production.json` (readable only by root and `homepage`):
+
+```jsonc
+"Mail": { "Host": "smtp.example.com", "Port": 587, "Username": "site@example.com", "Password": "…",
+          "FromAddress": "site@example.com", "FromName": "My website" }
+```
+
+or as environment variables: `HOMEPAGE_Mail__Host=smtp.example.com`, `HOMEPAGE_Mail__Password=…`, and so on.
+
+Links in emails (confirm, unsubscribe, the admin) use the site address from **Settings**, or the address of the
+request that caused the email.
+
 ## Logging
 
 Standard ASP.NET Core logging (`Logging:LogLevel`). The service logs to the journal: `journalctl -u homepage -f`.

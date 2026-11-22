@@ -84,6 +84,24 @@ else
                     @foreach (var b in Blogs) { <option value="@b.Id" selected="@(Equals(b.Id, value))">@b.Name</option> }
                 </select>
             }
+            else if (p.GetCustomAttribute<FormPickerAttribute>() is not null)
+            {
+                <label for="@id">@label</label>
+                <select id="@id" name="@name" data-search>
+                    <option value="0">(choose a form)</option>
+                    @foreach (var f in Forms) { <option value="@f.Id" selected="@(Equals(f.Id, value))">@f.Name@(f.Enabled ? "" : " (closed)")</option> }
+                </select>
+                <div class="help">Forms are made under <a href="/admin/forms" target="_blank">Forms</a>.</div>
+            }
+            else if (p.GetCustomAttribute<MailingListPickerAttribute>() is not null)
+            {
+                <label for="@id">@label</label>
+                <select id="@id" name="@name" data-search>
+                    <option value="0">(choose a list)</option>
+                    @foreach (var l in Lists) { <option value="@l.Id" selected="@(Equals(l.Id, value))">@l.Name</option> }
+                </select>
+                <div class="help">Lists are made under <a href="/admin/mail/lists" target="_blank">Mail</a>.</div>
+            }
             else if (p.GetCustomAttribute<MenuPickerAttribute>() is not null)
             {
                 <label for="@id">@label</label>
@@ -151,6 +169,8 @@ else
     [Parameter] public List<MediaItem> Media { get; set; } = [];
     [Parameter] public List<Menu> Menus { get; set; } = [];
     [Parameter] public IReadOnlyList<Blog> Blogs { get; set; } = [];
+    [Parameter] public IReadOnlyList<Homepage.Forms.Form> Forms { get; set; } = [];
+    [Parameter] public IReadOnlyList<Homepage.Mail.MailingList> Lists { get; set; } = [];
 
     private readonly List<string> _iconFields = [];
     private bool _linkFields;

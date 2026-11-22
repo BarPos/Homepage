@@ -176,6 +176,29 @@ The newest published posts, read when the page is rendered.
 | Columns (grid) | 1 to 4 posts side by side in the grid layout (one on phones) | 2 |
 | Show excerpts | yes / no | yes |
 
+### Form
+A form made under [Forms](forms.md). Visitors send it without leaving the page (a normal post without script).
+
+| Setting | Values | Default |
+|---|---|---|
+| Form | One of the forms; the list links to **Forms** | — |
+| Width | *Narrow* (640 px), *Normal*, *Wide*, *Full* | Narrow |
+| Alignment | *Left*, *Center*, *Right* | Left |
+
+Fields, labels and errors follow the theme (colors, radius, glass). A closed form shows a note instead.
+
+### Newsletter sign-up
+An email field and a button that add the visitor to a [mailing list](mail.md#mailing-lists).
+
+| Setting | Values | Default |
+|---|---|---|
+| Mailing list | One of the lists | — |
+| Heading, Text | Shown above the field | *Get the newsletter* |
+| Ask for a name | yes / no | no |
+| Button | Its text | *Subscribe* |
+| Layout | *Horizontal* (field and button in a row), *Vertical* | Horizontal |
+| Alignment | *Left*, *Center*, *Right* | Left |
+
 ## Site
 
 ### Menu

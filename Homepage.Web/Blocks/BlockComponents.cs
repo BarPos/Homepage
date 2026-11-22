@@ -21,6 +21,8 @@ public static class BlockComponents
         ["menu"] = typeof(MenuBlock),
         ["sitebar"] = typeof(SiteBarBlock),
         ["sitebrand"] = typeof(SiteBrandBlock),
+        ["form"] = typeof(FormBlock),
+        ["subscribe"] = typeof(SubscribeBlock),
     };
 
     public static Type? Get(string type) => Map.GetValueOrDefault(type);

@@ -1,0 +1,21 @@
+<nav class="tabs">
+    @foreach (var (key, label, url) in Tabs.Where(t => t.Item1 != "send" || CanWrite))
+    {
+        <a href="@url" class="@(key == Active ? "active" : null)">@label</a>
+    }
+</nav>
+@code {
+    [Parameter] public string Active { get; set; } = "";
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    /// <summary>Sending needs mail: rw; read-only users do not see the tab.</summary>
+    private bool CanWrite => HttpContext is not null && AdminContext.From(HttpContext)?.Perms.HasSystem(SystemGroups.Mail, Perm.Rw) == true;
+    private static readonly (string, string, string)[] Tabs =
+    [
+        ("overview", "Overview", "/admin/mail"),
+        ("send", "Send email", "/admin/mail/send"),
+        ("lists", "Mailing lists", "/admin/mail/lists"),
+        ("sent", "Sent", "/admin/mail/sent"),
+        ("templates", "Templates", "/admin/mail/templates"),
+        ("system", "System emails", "/admin/mail/system"),
+    ];
+}

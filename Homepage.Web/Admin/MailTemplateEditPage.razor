@@ -1,0 +1,72 @@
+@using Homepage.Mail
+@{
+    var sys = Key is null ? null : SystemEmails.Get(Key);
+    var action = sys is not null ? $"/admin/mail/system/{sys.Key}" : Id is { } id ? $"/admin/mail/templates/{id}" : "/admin/mail/templates";
+    var back = sys is not null ? "/admin/mail/system" : "/admin/mail/templates";
+}
+<AdminShell Title="@(sys?.Name ?? (Id is null ? "New template" : Name))" Section="mail" Back="@back" BackText="@(sys is not null ? "System emails" : "Templates")" Subtitle="@sys?.Description">
+    <Actions>
+        @if (sys is not null && Edited)
+        {
+            <form method="post" action="/admin/mail/system/@sys.Key/reset" data-confirm="Your changes to this email are lost." data-confirm-title="Back to the built-in text?" data-confirm-button="Reset">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <button class="btn">Reset to the built-in text</button>
+            </form>
+        }
+        @if (sys is null && Id is { } tid)
+        {
+            <form method="post" action="/admin/mail/templates/@tid/delete" data-confirm="This cannot be undone." data-confirm-title="Delete the template '@Name'?" data-confirm-button="Delete" data-confirm-danger>
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <button class="btn-danger">Delete</button>
+            </form>
+        }
+    </Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <form method="post" action="@action" class="card mail-compose">
+        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+        @if (sys is null)
+        {
+            <label for="tn">Name</label>
+            <input id="tn" name="name" type="text" value="@Name" maxlength="100" required placeholder="Monthly newsletter" />
+        }
+        else
+        {
+            <label class="inline"><input type="checkbox" name="enabled" value="true" checked="@Enabled" /> Send this email</label>
+        }
+        <label for="ts">Subject</label>
+        <input id="ts" name="subject" type="text" value="@Subject" maxlength="200" required />
+        <label for="tb">Text</label>
+        <textarea id="tb" name="body" rows="16" class="mono">@Body</textarea>
+        <div class="help">
+            Markdown. Placeholders:
+            @if (sys is not null)
+            {
+                @foreach (var (n, meaning) in sys.Variables) { <span class="var-chip" title="@meaning"><code>{{@n}}</code> @meaning</span> }
+            }
+            else
+            {
+                <span><code>{{name}}</code>, <code>{{name.comma}}</code>, <code>{{email}}</code>, <code>{{list.name}}</code>, <code>{{site.title}}</code>, <code>{{site.url}}</code></span>
+            }
+        </div>
+        <div class="form-actions">
+            <a class="btn" href="@back">Cancel</a>
+            <button class="btn-primary">Save</button>
+        </div>
+    </form>
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter] public string? Key { get; set; }
+    [Parameter] public int? Id { get; set; }
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Subject { get; set; } = "";
+    [Parameter] public string Body { get; set; } = "";
+    [Parameter] public bool Enabled { get; set; } = true;
+    [Parameter] public bool Edited { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

@@ -15,6 +15,7 @@
         <PackageReference Include="Markdig" />
         <PackageReference Include="HtmlSanitizer" />
         <PackageReference Include="MaxMind.Db" />
+        <PackageReference Include="MailKit" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\Homepage.Shared\Homepage.Shared.csproj" />

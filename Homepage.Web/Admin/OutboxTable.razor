@@ -1,0 +1,34 @@
+@using Homepage.Mail
+<div class="table-wrap">
+    <table>
+        <thead><tr><th>Queued</th><th>To</th><th>Subject</th><th>Kind</th><th>Status</th></tr></thead>
+        <tbody>
+            @foreach (var m in Items)
+            {
+                <tr>
+                    <td class="nowrap muted">@m.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</td>
+                    <td>@m.To</td>
+                    <td class="clip">@m.Subject</td>
+                    <td class="muted small">@Kind(m.Kind)</td>
+                    <td class="nowrap">
+                        @switch (m.Status)
+                        {
+                            case OutboxStatus.Sent: <span class="badge badge-ok" title="@m.SentAtUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)">sent</span> break;
+                            case OutboxStatus.Failed: <span class="badge badge-warn" title="@m.Error">failed</span> <span class="muted small">@m.Error</span> break;
+                            default: <span class="badge">waiting</span> @if (m.Attempts > 0) { <span class="muted small" title="@m.Error">try @(m.Attempts + 1)</span> } break;
+                        }
+                    </td>
+                </tr>
+            }
+            @if (Items.Count == 0) { <tr><td colspan="5" class="muted">No emails yet.</td></tr> }
+        </tbody>
+    </table>
+</div>
+@code {
+    [Parameter] public IReadOnlyList<OutboxMessage> Items { get; set; } = [];
+    private static string Kind(string k) => k switch
+    {
+        "campaign" => "to a list", "test" => "test",
+        _ => SystemEmails.Get(k)?.Name ?? k,
+    };
+}

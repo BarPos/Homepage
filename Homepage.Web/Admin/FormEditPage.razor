@@ -1,0 +1,172 @@
+@using Homepage.Forms
+@using Homepage.Mail
+@{ var isNew = Form is null; }
+<AdminShell Title="@(isNew ? "New form" : Settings.Name)" Section="forms" Back="@(isNew ? "/admin/forms" : $"/admin/forms/{Form!.Id}/submissions")" BackText="@(isNew ? "Forms" : "Answers")">
+    <Scripts><script src="@Asset.Url("js/form-builder.js")" defer></script></Scripts>
+    <Actions>
+        @if (!isNew)
+        {
+            <form method="post" action="/admin/forms/@Form!.Id/delete" data-confirm="Its answers are deleted too, and Form blocks that show it become empty." data-confirm-title="Delete the form '@Form.Name'?" data-confirm-button="Delete form" data-confirm-danger>
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <button class="btn-danger">Delete form</button>
+            </form>
+        }
+    </Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <form method="post" action="@(isNew ? "/admin/forms" : $"/admin/forms/{Form!.Id}")" class="form-editor" x-data="hpFormBuilder" data-fields="@FieldsJson()" data-type-names="@TypeNamesJson()" data-consent="@ConsentLabel">
+        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+        <input type="hidden" name="fields" x-bind:value="json()" />
+        <div class="card">
+            <div class="form-row">
+                <div>
+                    <label for="fn">Name</label>
+                    <input id="fn" name="name" type="text" value="@Settings.Name" maxlength="100" required placeholder="Contact" autofocus="@isNew" />
+                    <div class="help">Only you see it: in the admin, the Form block and emails.</div>
+                </div>
+                <div>
+                    <label for="fsub">Button text</label>
+                    <input id="fsub" name="submitLabel" type="text" value="@Settings.SubmitLabel" maxlength="60" required />
+                </div>
+            </div>
+            <label class="inline" style="margin-top:12px"><input type="checkbox" name="enabled" value="true" checked="@Settings.Enabled" /> Open: visitors can send it</label>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Fields</h2>
+            <div class="field-rows">
+                <template x-for="(f, i) in fields" :key="f.id">
+                    <div class="field-row" x-bind:class="open === f.id && 'is-open'">
+                        <div class="field-row-head">
+                            <button type="button" class="field-row-toggle" x-on:click="open = open === f.id ? null : f.id" x-bind:aria-expanded="open === f.id">
+                                <span class="field-type-chip" x-text="typeName(f.type)"></span>
+                                <strong x-text="f.label || '(no label)'"></strong>
+                                <span class="muted small" x-show="f.required">required</span>
+                                <span class="muted small" x-show="f.width === 'Half'">half width</span>
+                            </button>
+                            <span class="row-tools">
+                                <button type="button" class="btn-sm icon" x-on:click="move(i, -1)" x-bind:disabled="i === 0" title="Move up" aria-label="Move up">↑</button>
+                                <button type="button" class="btn-sm icon" x-on:click="move(i, 1)" x-bind:disabled="i === fields.length - 1" title="Move down" aria-label="Move down">↓</button>
+                                <button type="button" class="btn-sm icon" x-on:click="fields.splice(i, 1)" title="Remove field" aria-label="Remove field">✕</button>
+                            </span>
+                        </div>
+                        <div class="field-row-body" x-show="open === f.id">
+                            <div class="form-row">
+                                <div><label x-bind:for="'fl' + f.id">Label</label><input type="text" x-bind:id="'fl' + f.id" x-model="f.label" maxlength="200" /></div>
+                                <div>
+                                    <label x-bind:for="'ft' + f.id">Type</label>
+                                    <select x-bind:id="'ft' + f.id" x-model="f.type">
+                                        @foreach (var t in Enum.GetValues<FieldType>()) { <option value="@t">@Name(t)</option> }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row" x-show="f.type !== 'Checkbox' && f.type !== 'Radio' && f.type !== 'Checkboxes'">
+                                <div><label x-bind:for="'fp' + f.id">Placeholder</label><input type="text" x-bind:id="'fp' + f.id" x-model="f.placeholder" maxlength="200" /></div>
+                                <div></div>
+                            </div>
+                            <div x-show="f.type === 'Select' || f.type === 'Radio' || f.type === 'Checkboxes'">
+                                <label x-bind:for="'fo' + f.id">Choices, one per line</label>
+                                <textarea rows="4" x-bind:id="'fo' + f.id" x-bind:value="f.options.join('\n')" x-on:input="f.options = $event.target.value.split('\n')"></textarea>
+                            </div>
+                            <div><label x-bind:for="'fh' + f.id">Help text</label><input type="text" x-bind:id="'fh' + f.id" x-model="f.help" maxlength="300" placeholder="Shown under the field" /></div>
+                            <div class="field-row-flags">
+                                <label class="inline"><input type="checkbox" x-model="f.required" /> Required</label>
+                                <label class="inline"><input type="checkbox" x-bind:checked="f.width === 'Half'" x-on:change="f.width = $event.target.checked ? 'Half' : 'Full'" /> Half width (two side by side)</label>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <p class="muted" x-show="!fields.length">No fields yet. Add some below.</p>
+            </div>
+            <div class="add-field">
+                <span class="muted small">Add:</span>
+                <button type="button" class="btn-sm" x-on:click="add('Text', 'Name')">Name</button>
+                <button type="button" class="btn-sm" x-on:click="add('Email', 'Email')">Email</button>
+                <button type="button" class="btn-sm" x-on:click="add('Textarea', 'Message')">Message</button>
+                <button type="button" class="btn-sm" x-on:click="add('Phone', 'Phone')">Phone</button>
+                <button type="button" class="btn-sm" x-on:click="add('Select', 'Topic', ['Question', 'Feedback', 'Other'])">Dropdown</button>
+                <button type="button" class="btn-sm" x-on:click="add('Checkbox', 'I agree to get emails')">Consent checkbox</button>
+                <button type="button" class="btn-sm" x-on:click="add('Text', '')">Other field…</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">After sending</h2>
+            <label for="fmsg">Thank-you message</label>
+            <textarea id="fmsg" name="successMessage" rows="2" maxlength="1000">@Settings.SuccessMessage</textarea>
+            <label for="furl" style="margin-top:12px">Or go to a page</label>
+            <div class="link-field @(LinkLabel.Length > 0 ? "has-ref" : null)">
+                <span class="link-chip" title="@LinkLabel"><span data-link-resolved="furl">@LinkLabel.Replace("→ ", "")</span><button type="button" data-link-clear="furl" title="Remove the link" aria-label="Remove the link">✕</button></span>
+                <input id="furl" name="successUrl" type="text" value="@Settings.SuccessUrl" placeholder="(stay on the page and show the message)" maxlength="1000" />
+                <button type="button" class="btn-sm" data-open-dialog="link-dialog" data-link-for="furl">Choose…</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Email</h2>
+            @if (!MailReady) { <div class="inline-alert warn">Email is not set up on this server yet; these take effect once it is. See <a href="/admin/mail">Mail</a>.</div> }
+            <label for="fto">Tell these addresses about new answers</label>
+            <input id="fto" name="notifyEmails" type="text" value="@Settings.NotifyEmails" maxlength="1000" placeholder="you@example.com, team@example.com" />
+            <div class="help">Separate several with commas. Replying to the email replies to the sender (when the form has an Email field). The text is the “@SystemEmails.Get(SystemEmails.FormNotification)!.Name” <a href="/admin/mail/system">system email</a>.</div>
+            <label class="inline" style="margin-top:12px"><input type="checkbox" name="confirmToSender" value="true" checked="@Settings.ConfirmToSender" /> Send the sender a copy of their answers (needs an Email field)</label>
+            <div class="form-row" style="margin-top:12px">
+                <div>
+                    <label for="flist">Add to a mailing list</label>
+                    <select id="flist" name="mailingListId">
+                        <option value="">(no)</option>
+                        @foreach (var l in Lists) { <option value="@l.Id" selected="@(l.Id == Settings.MailingListId)">@l.Name</option> }
+                    </select>
+                    <div class="help">Only when the sender ticks the consent checkbox. Needs an Email field and a single checkbox.</div>
+                </div>
+                <div>
+                    <label for="fconsent">Consent checkbox</label>
+                    <select id="fconsent" name="consentField" data-native x-model="consent">
+                        <option value="">(choose)</option>
+                        <template x-for="f in fields.filter(x => x.type === 'Checkbox' && x.label.trim())" :key="f.id">
+                            <option x-bind:value="f.label.trim()" x-text="f.label.trim()" x-bind:selected="f.label.trim() === consent"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="form-actions">
+            <a class="btn" href="@(isNew ? "/admin/forms" : $"/admin/forms/{Form!.Id}/submissions")">Cancel</a>
+            <button class="btn-primary">@(isNew ? "Create form" : "Save form")</button>
+        </div>
+    </form>
+    <LinkDialog />
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter] public Form? Form { get; set; }
+    [Parameter] public FormSettings Settings { get; set; } = new("", true, "Send", "Thank you! Your message has been sent.", "", "");
+    [Parameter] public IReadOnlyList<FormField> Fields { get; set; } = [];
+    /// <summary>The label of the consent checkbox (the browser does not know new fields' keys).</summary>
+    [Parameter] public string ConsentLabel { get; set; } = "";
+    [Parameter] public IReadOnlyList<MailingList> Lists { get; set; } = [];
+    [Parameter] public bool MailReady { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Inject] public SiteTree Tree { get; set; } = default!;
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    private string LinkLabel = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var map = await Tree.GetAsync();
+        LinkLabel = map.Describe(Settings.SuccessUrl) is { } d ? $"→ {d.Title} · {d.Path}" : "";
+    }
+
+    private static string Name(FieldType t) =>
+        typeof(FieldType).GetField(t.ToString())?.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.DisplayAttribute), false)
+            .OfType<System.ComponentModel.DataAnnotations.DisplayAttribute>().FirstOrDefault()?.Name ?? t.ToString();
+
+    private static string TypeNamesJson() => System.Text.Json.JsonSerializer.Serialize(Enum.GetValues<FieldType>().ToDictionary(t => t.ToString(), Name));
+
+    private string FieldsJson() => System.Text.Json.JsonSerializer.Serialize(Fields.Select(f => new
+    {
+        key = f.Key, label = f.Label, type = f.Type.ToString(), required = f.Required, placeholder = f.Placeholder, help = f.Help, options = f.Options, width = f.Width.ToString(),
+    }));
+}

@@ -1,0 +1,51 @@
+@using Homepage.Mail
+@inject MailService Mail
+@inject FormGuard Guard
+@{
+    var p = Node.PropsAs<SubscribeProps>();
+    var id = "s" + Node.Id;
+}
+@if (_list is null)
+{
+    if (Ctx.Edit)
+    {
+        <div class="blk hp-form-empty">@(p.ListId == 0 ? "Choose a mailing list in the block settings. Lists are made under Mail in the admin." : "The chosen mailing list was deleted. Choose another one.")</div>
+    }
+    return;
+}
+<div class="blk hp-subscribe @Css.Align(p.Align) hp-subscribe-@(p.Layout == Orientation.Vertical ? "vertical" : "horizontal")">
+    @if (p.Title.Length > 0) { <h3 class="hp-subscribe-title">@p.Title</h3> }
+    @if (p.Text.Length > 0) { <p class="hp-subscribe-text">@p.Text</p> }
+    <form class="hp-form" method="post" action="/hp/mail/subscribe/@_list.Id" data-hp-form data-scope="list:@_list.Id">
+        <input type="hidden" name="@FormGuard.TokenField" value="@Guard.Issue("list:" + _list.Id)" />
+        <div class="hp-trap" aria-hidden="true"><label>Leave this empty <input type="text" name="@FormGuard.TrapField" tabindex="-1" autocomplete="off" /></label></div>
+        <div class="hp-form-status" role="status" aria-live="polite" hidden></div>
+        <div class="hp-subscribe-row">
+            @if (p.AskName)
+            {
+                <div class="hp-field" data-field="name">
+                    <label class="sr-only" for="@id-name">Name</label>
+                    <input id="@id-name" name="name" type="text" maxlength="200" placeholder="Your name" autocomplete="name" />
+                </div>
+            }
+            <div class="hp-field" data-field="email">
+                <label class="sr-only" for="@id-email">Email address</label>
+                <input id="@id-email" name="email" type="email" maxlength="200" placeholder="you@example.com" autocomplete="email" required />
+                <small class="hp-error" hidden></small>
+            </div>
+            <button class="btn btn-primary btn-medium" type="@(Ctx.Edit ? "button" : "submit")">@p.ButtonLabel</button>
+        </div>
+    </form>
+    <script src="@Asset.Url("js/hp-forms.js")" defer></script>
+</div>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+    private MailingList? _list;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var id = Node.PropsAs<SubscribeProps>().ListId;
+        _list = id > 0 ? (await Mail.ListsAsync()).FirstOrDefault(l => l.Id == id) : null;
+    }
+}

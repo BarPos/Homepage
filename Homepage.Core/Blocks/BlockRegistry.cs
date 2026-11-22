@@ -30,7 +30,7 @@ public sealed record BlockDefinition(
 public static class BlockRegistry
 {
     private static readonly string[] Content =
-        ["heading", "markdown", "image", "button", "quote", "spacer", "divider", "html", "postlist", "menu"];
+        ["heading", "markdown", "image", "button", "quote", "spacer", "divider", "html", "postlist", "menu", "form", "subscribe"];
 
     /// <summary>What layout containers (column, group, site bar) hold: every block but sections and site bars.</summary>
     private static readonly string[] Inner = [.. Content, "columns", "group", "sitebrand"];
@@ -55,6 +55,8 @@ public static class BlockRegistry
         new("html", "HTML", BlockCategory.Content, typeof(HtmlProps), "</>", RequiredSystemGroup: SystemGroups.Html),
         new("postlist", "Latest posts", BlockCategory.Dynamic, typeof(PostListProps), "☰"),
         new("menu", "Menu", BlockCategory.Site, typeof(MenuProps), "≡"),
+        new("form", "Form", BlockCategory.Dynamic, typeof(FormProps), "✉"),
+        new("subscribe", "Newsletter sign-up", BlockCategory.Dynamic, typeof(SubscribeProps), "@"),
         new("sitebar", "Site bar", BlockCategory.Site, typeof(SiteBarProps), "▤", IsContainer: true,
             AllowedChildren: Inner,
             AllowedParents: ["", "section"], OnlyIn: [TreeKind.Header, TreeKind.Footer]),

@@ -1,0 +1,108 @@
+@using Homepage.Forms
+@inject FormService Forms
+@inject FormGuard Guard
+@{
+    var p = Node.PropsAs<FormProps>();
+    var id = "f" + Node.Id;
+}
+@if (_form is null)
+{
+    if (Ctx.Edit)
+    {
+        <div class="blk hp-form-empty @Css.Width(p.Width)">@(p.FormId == 0 ? "Choose a form in the block settings. Forms are made under Forms in the admin." : "The chosen form was deleted. Choose another one.")</div>
+    }
+    return;
+}
+<div class="blk hp-form-wrap @Css.Width(p.Width) @Css.Align(p.Align)">
+    @if (!_form.Enabled)
+    {
+        <p class="hp-form-closed">This form is closed.</p>
+    }
+    else
+    {
+        <form class="hp-form" method="post" action="/hp/forms/@_form.Id" data-hp-form data-scope="form:@_form.Id">
+            <input type="hidden" name="@FormGuard.TokenField" value="@Guard.Issue("form:" + _form.Id)" />
+            <div class="hp-trap" aria-hidden="true"><label>Leave this empty <input type="text" name="@FormGuard.TrapField" tabindex="-1" autocomplete="off" /></label></div>
+            <div class="hp-form-status" role="status" aria-live="polite" hidden></div>
+            <div class="hp-fields">
+                @foreach (var f in _fields)
+                {
+                    var fid = $"{id}-{f.Key}";
+                    var help = f.Help.Length > 0 ? fid + "-help" : null;
+                    <div class="hp-field hp-field-@f.Type.ToString().ToLowerInvariant() @(f.Width == FieldWidth.Half ? "hp-half" : null)" data-field="@f.Key">
+                        @switch (f.Type)
+                        {
+                            case FieldType.Checkbox:
+                                <label class="hp-check"><input type="checkbox" id="@fid" name="@f.Key" value="true" required="@f.Required" aria-describedby="@help" /> <span>@f.Label@Req(f)</span></label>
+                                break;
+                            case FieldType.Radio or FieldType.Checkboxes:
+                                <fieldset aria-describedby="@help">
+                                    <legend>@f.Label@Req(f)</legend>
+                                    @foreach (var o in f.Options)
+                                    {
+                                        <label class="hp-check"><input type="@(f.Type == FieldType.Radio ? "radio" : "checkbox")" name="@f.Key" value="@o" required="@(f.Required && f.Type == FieldType.Radio)" /> <span>@o</span></label>
+                                    }
+                                </fieldset>
+                                break;
+                            default:
+                                <label for="@fid">@f.Label@Req(f)</label>
+                                @if (f.Type == FieldType.Textarea)
+                                {
+                                    <textarea id="@fid" name="@f.Key" rows="5" maxlength="@f.MaxLength" placeholder="@NullIfEmpty(f.Placeholder)" required="@f.Required" aria-describedby="@help"></textarea>
+                                }
+                                else if (f.Type == FieldType.Select)
+                                {
+                                    <select id="@fid" name="@f.Key" required="@f.Required" aria-describedby="@help">
+                                        <option value="">@(f.Placeholder.Length > 0 ? f.Placeholder : "Choose…")</option>
+                                        @foreach (var o in f.Options) { <option value="@o">@o</option> }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <input id="@fid" name="@f.Key" type="@InputType(f.Type)" maxlength="@(f.Type is FieldType.Number or FieldType.Date ? null : f.MaxLength)"
+                                           placeholder="@NullIfEmpty(f.Placeholder)" required="@f.Required" aria-describedby="@help" autocomplete="@AutoComplete(f)" />
+                                }
+                                break;
+                        }
+                        @if (help is not null) { <small class="hp-help" id="@help">@f.Help</small> }
+                        <small class="hp-error" hidden></small>
+                    </div>
+                }
+            </div>
+            <p class="hp-form-actions"><button class="btn btn-primary btn-medium" type="@(Ctx.Edit ? "button" : "submit")">@_form.SubmitLabel</button></p>
+        </form>
+        <script src="@Asset.Url("js/hp-forms.js")" defer></script>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public BlockNode Node { get; set; } = default!;
+    [CascadingParameter] public RenderContext Ctx { get; set; } = default!;
+    private Form? _form;
+    private List<FormField> _fields = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var id = Node.PropsAs<FormProps>().FormId;
+        _form = id > 0 ? await Forms.GetAsync(id) : null;
+        _fields = FormField.Parse(_form?.Fields);
+    }
+
+    private static RenderFragment Req(FormField f) => __builder =>
+    {
+        if (f.Required) { <span class="hp-req" aria-hidden="true"> *</span> }
+    };
+
+    private static string? NullIfEmpty(string s) => s.Length > 0 ? s : null;
+
+    private static string InputType(FieldType t) => t switch
+    {
+        FieldType.Email => "email", FieldType.Number => "number", FieldType.Phone => "tel", FieldType.Url => "url", FieldType.Date => "date", _ => "text",
+    };
+
+    private static string? AutoComplete(FormField f) => f.Type switch
+    {
+        FieldType.Email => "email", FieldType.Phone => "tel",
+        FieldType.Text when f.Key.Contains("name", StringComparison.Ordinal) => "name",
+        _ => null,
+    };
+}

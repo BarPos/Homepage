@@ -20,6 +20,14 @@ public sealed class MediaPickerAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class BlogPickerAttribute : Attribute;
 
+/// <summary>A form id (rendered as a select of forms).</summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class FormPickerAttribute : Attribute;
+
+/// <summary>A mailing list id (rendered as a select of mailing lists).</summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class MailingListPickerAttribute : Attribute;
+
 /// <summary>A menu key (rendered as a select of menus).</summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class MenuPickerAttribute : Attribute;
@@ -208,6 +216,26 @@ public sealed class PostListProps
     [Display(Name = "Show dates")] public bool ShowDate { get; set; } = true;
     [Display(Name = "Show authors")] public bool ShowAuthor { get; set; } = true;
     [Display(Name = "Columns (grid)"), Range(1, 4)] public int GridColumns { get; set; } = 2;
+}
+
+/// <summary>A form from Forms, filled in on the page.</summary>
+public sealed class FormProps
+{
+    [Display(Name = "Form"), FormPicker] public int FormId { get; set; }
+    [Display(Name = "Width")] public ContentWidth Width { get; set; } = ContentWidth.Narrow;
+    [Display(Name = "Alignment")] public Align Align { get; set; } = Align.Left;
+}
+
+/// <summary>A sign-up for a mailing list: email (and name), with double opt-in when the list asks for it.</summary>
+public sealed class SubscribeProps
+{
+    [Display(Name = "Mailing list"), MailingListPicker] public int ListId { get; set; }
+    [Display(Name = "Heading"), StringLength(200)] public string Title { get; set; } = "Get the newsletter";
+    [Display(Name = "Text"), DataType(DataType.MultilineText), StringLength(1000)] public string Text { get; set; } = "News and articles by email. Unsubscribe at any time.";
+    [Display(Name = "Ask for a name")] public bool AskName { get; set; }
+    [Display(Name = "Button"), StringLength(60)] public string ButtonLabel { get; set; } = "Subscribe";
+    [Display(Name = "Layout")] public Orientation Layout { get; set; } = Orientation.Horizontal;
+    [Display(Name = "Alignment")] public Align Align { get; set; } = Align.Left;
 }
 
 /// <summary>The bar at the top (or bottom) of the site: a row holding the brand, menus and buttons.</summary>

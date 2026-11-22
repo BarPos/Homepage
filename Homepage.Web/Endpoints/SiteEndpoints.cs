@@ -204,6 +204,6 @@ public static class SiteEndpoints
         return Results.Text(sb.ToString().Replace("encoding=\"utf-16\"", "encoding=\"utf-8\""), "application/rss+xml; charset=utf-8");
     }
 
-    private static string BaseUrl(string configured, HttpRequest req) =>
+    internal static string BaseUrl(string configured, HttpRequest req) =>
         !string.IsNullOrWhiteSpace(configured) ? configured.TrimEnd('/') : $"{req.Scheme}://{req.Host}";
 }

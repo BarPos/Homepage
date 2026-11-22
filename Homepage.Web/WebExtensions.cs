@@ -17,6 +17,7 @@ public static class WebExtensions
         services.AddSingleton<PublicContent>();
         services.AddScoped<AdminFilter>();
         services.AddSingleton<SignInLimiter>();
+        services.AddSingleton<FormGuard>();
         services.AddOutputCache(SiteEndpoints.AddPublicCachePolicy);
         services.AddAntiforgery(o =>
         {
@@ -45,6 +46,9 @@ public static class WebExtensions
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             o.AddPolicy("signin", ctx => RateLimitPartition.GetFixedWindowLimiter(
                 SignInLimiter.Network(ctx.Connection.RemoteIpAddress), // IPv6 per /64
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+            o.AddPolicy("forms", ctx => RateLimitPartition.GetFixedWindowLimiter(
+                SignInLimiter.Network(ctx.Connection.RemoteIpAddress),
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
             o.AddPolicy("analytics", ctx => RateLimitPartition.GetFixedWindowLimiter(
                 SignInLimiter.Network(ctx.Connection.RemoteIpAddress),
@@ -86,6 +90,7 @@ public static class WebExtensions
         app.UseOutputCache();
         app.MapAdmin();
         app.MapAnalyticsCollection();
+        app.MapForms();
         app.MapSite();
     }
 }

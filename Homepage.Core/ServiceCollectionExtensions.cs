@@ -70,6 +70,11 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<UpdatesBackgroundService>();
 
         services.Configure<Analytics.AnalyticsOptions>(config.GetSection(Analytics.AnalyticsOptions.Section));
+        services.Configure<Mail.MailOptions>(config.GetSection(Mail.MailOptions.Section));
+        services.AddSingleton<Mail.EmailRenderer>();
+        services.AddSingleton<Mail.MailService>();
+        services.AddHostedService<Mail.OutboxWorker>();
+        services.AddSingleton<Forms.FormService>();
         services.AddSingleton<Analytics.CountryLookup>();
         services.AddSingleton<Analytics.AnalyticsCollector>();
         services.AddSingleton<Analytics.AnalyticsQueries>();

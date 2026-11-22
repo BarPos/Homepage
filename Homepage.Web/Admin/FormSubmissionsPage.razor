@@ -1,0 +1,72 @@
+@using Homepage.Forms
+@{ var cols = Fields.Take(3).ToList(); }
+<AdminShell Title="@Form.Name" Section="forms" Back="/admin/forms" BackText="Forms" Subtitle="What visitors sent with this form.">
+    <Badges>@if (!Form.Enabled) { <span class="badge badge-off">closed</span> }</Badges>
+    <Actions>
+        @if (CanWrite)
+        {
+            <a class="btn" href="/admin/forms/@Form.Id/export">Export CSV</a>
+            <a class="btn btn-primary" href="/admin/forms/@Form.Id">Edit form</a>
+        }
+    </Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <ListFilters Url="Url" Placeholder="Search the answers…">
+        <select name="show" aria-label="Show">
+            <option value="">All answers</option>
+            <option value="unread" selected="@(Url["show"] == "unread")">New only</option>
+        </select>
+    </ListFilters>
+    <div id="list">
+    <form method="post" action="/admin/forms/@Form.Id/submissions/bulk" x-data="{ n: 0 }" x-on:change="n = $el.querySelectorAll('input[name=id]:checked').length">
+        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+        <div class="bulk-bar" x-show="n > 0" x-cloak>
+            <span x-text="n + ' selected'"></span>
+            <button class="btn-sm" name="action" value="read">Mark as read</button>
+            <button class="btn-sm" name="action" value="unread">Mark as new</button>
+            @if (CanWrite) { <button class="btn-sm btn-danger" name="action" value="delete" data-confirm="This cannot be undone." data-confirm-title="Delete the selected answers?" data-confirm-button="Delete" data-confirm-danger>Delete</button> }
+        </div>
+        <div class="table-wrap">
+            <table class="submissions">
+                <thead><tr>
+                    <th class="check"><input type="checkbox" aria-label="Select all" x-on:change="$root.querySelectorAll('input[name=id]').forEach(c => c.checked = $event.target.checked)" /></th>
+                    <th>Received</th>
+                    @foreach (var c in cols) { <th>@c.Label</th> }
+                    <th></th>
+                </tr></thead>
+                <tbody>
+                    @foreach (var s in Result.Items)
+                    {
+                        var data = FormService.ParseData(s.Data);
+                        <tr class="@(s.Read ? null : "unread")">
+                            <td class="check"><input type="checkbox" name="id" value="@s.Id" aria-label="Select" /></td>
+                            <td class="nowrap"><a href="/admin/forms/@Form.Id/submissions/@s.Id">@s.AtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</a>@if (!s.Read) { <span class="badge badge-ok">new</span> }</td>
+                            @foreach (var c in cols)
+                            {
+                                var t = FormService.Text(data[c.Key]);
+                                <td class="clip">@(t.Length > 80 ? t[..80] + "…" : t)</td>
+                            }
+                            <td class="right"><a class="btn btn-sm" href="/admin/forms/@Form.Id/submissions/@s.Id">Open</a></td>
+                        </tr>
+                    }
+                    @if (Result.Total == 0) { <tr><td colspan="@(cols.Count + 3)" class="muted">@(Url["q"] is { Length: > 0 } || Url["show"] is { Length: > 0 } ? "No answers match." : "No answers yet. Put the form on a page with a Form block.")</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </form>
+    <Pager Url="Url" Page="Result.Page" TotalPages="Result.TotalPages" Total="Result.Total" From="Result.From" To="Result.To" />
+    </div>
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public Form Form { get; set; } = default!;
+    [Parameter, EditorRequired] public PagedResult<FormSubmission> Result { get; set; } = default!;
+    [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    private List<FormField> Fields => FormField.Parse(Form.Fields);
+}

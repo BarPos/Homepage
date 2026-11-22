@@ -1,0 +1,75 @@
+@using Homepage.Mail
+<AdminShell Title="Mail" Section="mail" Subtitle="Email from this site: answers to forms, newsletters and account notices.">
+    <MailTabs Active="overview" />
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    <div class="grid-2">
+        <div class="card">
+            <h2 class="card-title">Sending server (SMTP)</h2>
+            @if (Options.Configured)
+            {
+                <dl class="facts">
+                    <dt>Server</dt><dd><code>@Options.Host:@Options.Port</code> <span class="muted small">(@Options.Security)</span></dd>
+                    <dt>Sign-in</dt><dd>@(Options.Username.Length > 0 ? Options.Username : "none")</dd>
+                    <dt>From</dt><dd>@(Options.FromName.Length > 0 ? $"{Options.FromName} <{Options.FromAddress}>" : Options.FromAddress)</dd>
+                    <dt>Speed</dt><dd>at most @Options.MaxPerMinute emails a minute</dd>
+                </dl>
+                @if (CanWrite)
+                {
+                    <form method="post" action="/admin/mail/test" class="form-actions" style="justify-content:flex-start">
+                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                        <button class="btn">Send a test email to me</button>
+                        <span class="muted small">@(MyEmail.Length > 0 ? MyEmail : "Set your email address on your profile first.")</span>
+                    </form>
+                }
+            }
+            else
+            {
+                <p><span class="badge badge-warn">not set up</span></p>
+                <p class="muted">Emails are queued but not sent until the server knows an SMTP server. Add a <code>Mail</code> section to the server's configuration and restart it:</p>
+                <pre class="code">"Mail": {
+  "Host": "smtp.example.com", "Port": 587,
+  "Username": "site@@example.com", "Password": "…",
+  "FromAddress": "site@@example.com", "FromName": "My website"
+}</pre>
+                <p class="muted small">On an installed server: <code>/opt/homepage/config/appsettings.Production.json</code>, then <code>sudo systemctl restart homepage</code>. Or the environment variables <code>HOMEPAGE_Mail__Host</code> and so on.</p>
+            }
+        </div>
+        <div class="card">
+            <h2 class="card-title">Outbox</h2>
+            <div class="kpis">
+                <div class="kpi"><div class="kpi-value">@Pending</div><div class="kpi-label">waiting</div></div>
+                <div class="kpi"><div class="kpi-value">@Sent</div><div class="kpi-label">sent</div></div>
+                <div class="kpi"><div class="kpi-value @(Failed > 0 ? "bad" : null)">@Failed</div><div class="kpi-label">failed</div></div>
+            </div>
+            <p class="muted small">Failed emails were tried 6 times. Sent emails are kept for 90 days.</p>
+            <div class="form-actions" style="justify-content:flex-start">
+                <a class="btn" href="/admin/mail/sent">See all</a>
+                @if (CanWrite && Failed > 0)
+                {
+                    <form method="post" action="/admin/mail/retry">
+                        <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                        <button class="btn">Try the failed ones again</button>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <h2 class="card-title">Latest emails</h2>
+        <OutboxTable Items="Recent" />
+    </div>
+</AdminShell>
+@code {
+    [Parameter] public MailOptions Options { get; set; } = new();
+    [Parameter] public int Pending { get; set; }
+    [Parameter] public int Sent { get; set; }
+    [Parameter] public int Failed { get; set; }
+    [Parameter] public IReadOnlyList<OutboxMessage> Recent { get; set; } = [];
+    [Parameter] public string MyEmail { get; set; } = "";
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+}

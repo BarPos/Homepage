@@ -3,8 +3,19 @@
         <section class="sec sec-narrow pad-xl">
             <div class="container al-center">
                 <h1>@Heading</h1>
-                <p class="muted">@Text</p>
-                <p><a class="btn btn-primary" href="/">Go to the home page</a></p>
+                <p class="muted msg-text">@Text</p>
+                @if (Items.Count > 0)
+                {
+                    <ul class="msg-list">@foreach (var i in Items) { <li>@i</li> }</ul>
+                }
+                @if (PostUrl is not null)
+                {
+                    <form method="post" action="@PostUrl" class="msg-action"><button class="btn btn-primary">@PostLabel</button></form>
+                }
+                else
+                {
+                    <p><a class="btn btn-primary" href="@ButtonUrl">@ButtonText</a></p>
+                }
             </div>
         </section>
     </SiteDocument>
@@ -13,4 +24,10 @@
     [Parameter, EditorRequired] public RenderContext Ctx { get; set; } = default!;
     [Parameter] public string Heading { get; set; } = "Page not found";
     [Parameter] public string Text { get; set; } = "The page you are looking for does not exist.";
+    [Parameter] public IReadOnlyList<string> Items { get; set; } = [];
+    [Parameter] public string ButtonText { get; set; } = "Go to the home page";
+    [Parameter] public string ButtonUrl { get; set; } = "/";
+    /// <summary>A button that posts here instead of the link (confirm, unsubscribe).</summary>
+    [Parameter] public string? PostUrl { get; set; }
+    [Parameter] public string PostLabel { get; set; } = "Continue";
 }

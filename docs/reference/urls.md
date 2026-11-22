@@ -23,6 +23,11 @@ nav_order: 2
 | `/robots.txt` | Disallows `/admin/`, points at the sitemap | yes |
 | `/favicon.ico` | Redirects to the ICO favicon (or the PNG, or the SVG) chosen in the settings; `404` without one | no |
 | `/hp/event` (POST) | Page views and engagement time from the analytics script (JSON, at most 4 KB; only from this site's pages; `204`, or `429` above 120 per minute per network) | no |
+| `/hp/forms/<id>` (POST) | A form's answers. With `Accept: application/json` answers `{"ok","message","errors":{field:message},"redirect"}`, otherwise a page or a redirect. 10 per minute per network. | no |
+| `/hp/forms/token?scope=form:<id>` | A fresh anti-spam token for a form on a cached page (`no-store`) | no |
+| `/hp/mail/subscribe/<listId>` (POST) | The Newsletter sign-up block (`email`, `name`); answers like `/hp/forms` | no |
+| `/hp/mail/confirm/<token>` | The confirm page of a double opt-in subscription; POST confirms | no |
+| `/hp/mail/unsubscribe/<token>` | The unsubscribe page; POST unsubscribes (also RFC 8058 one-click: `List-Unsubscribe=One-Click`) | no |
 | `/media/<file>` | An uploaded file, one-year immutable cache | browser |
 | `/theme/<id>/<version>.css` | The CSS variables of a theme version, one-year immutable cache | browser |
 | `/_content/Homepage.Web/…` | Static files: `site.css`, scripts, libraries (versioned with `?v=`) | browser |
@@ -59,5 +64,11 @@ All under `/admin`, signed in (except `login`), never cached. POST requests need
 | `/admin/settings`, `/admin/updates/check` | Settings, release check |
 | `/admin/updates/apply` (POST) | Stage an update; with `Accept: application/json` answers `{"ok":true,"from":…,"to":…}` or `{"error":…}` |
 | `/admin/updates/status` | `{"version":…,"run":{"state","from","to","message","finishedAt"}}`, polled by the progress dialog |
+| `/admin/forms`, `/admin/forms/new`, `/admin/forms/<id>`, `/<id>/delete` | Forms: list, editor; create (POST `/admin/forms`), save, delete |
+| `/admin/forms/<id>/submissions?q=&show=unread`, `/submissions/<id>`, `/submissions/bulk` (POST), `/export` | Answers: list, one answer (marks it read), mark read/new or delete, CSV |
+| `/admin/mail`, `/admin/mail/test`, `/admin/mail/retry` (POST) | Mail overview; a test email to yourself; retry failed emails |
+| `/admin/mail/lists`, `/admin/mail/lists/<id>?q=&status=`, `/<id>/subscribers` (POST), `/<id>/subscribers/<sid>` (POST), `/<id>/export`, `/<id>/delete` | Mailing lists and subscribers |
+| `/admin/mail/send?list=&template=`, `/admin/mail/sent?status=` | Compose and send to a list (POST, `action=test\|send`); campaigns and the outbox |
+| `/admin/mail/templates`, `/templates/new`, `/templates/<id>`, `/<id>/delete`; `/admin/mail/system`, `/system/<key>`, `/system/<key>/reset` | Templates and system emails |
 | `/admin/audit?q=&area=&from=&to=` | Audit log (`q` also matches IP addresses) |
 | `/admin/analytics?range=&from=&to=&page=&entry=&source=&channel=&referrer=&utm_source=&utm_medium=&utm_campaign=&country=&device=&browser=&os=` | Analytics (`range`: `today`, `yesterday`, `7d`, `30d`, `month`, `lastmonth`, `12mo`, `custom` with `from`/`to` as `yyyy-MM-dd`; a filter value `(none)` means empty). `/realtime`, `/export?dim=…` (CSV), `/settings` and `/delete` (POST) |

@@ -32,6 +32,17 @@
                     <a href="/admin/menus" class="@Active("menus")">Menus</a>
                     <a href="/admin/blogs" class="@Active("blogs")">Blogs</a>
                 }
+                @if (P.HasSystem(SystemGroups.Forms, Perm.Ro))
+                {
+                    <a href="/admin/forms" class="@Active("forms")">
+                        Forms
+                        @if (_unread > 0) { <span class="nav-count" title="New answers">@_unread</span> }
+                    </a>
+                }
+                @if (P.HasSystem(SystemGroups.Mail, Perm.Ro))
+                {
+                    <a href="/admin/mail" class="@Active("mail")">Mail</a>
+                }
                 @if (P.IsAdmin)
                 {
                     <a href="/admin/users" class="@Active("access")">Users &amp; permissions</a>
@@ -93,4 +104,11 @@
     private AdminContext? A => HttpContext is null ? null : AdminContext.From(HttpContext);
     private EffectivePermissions P => A?.Perms ?? EffectivePermissions.Nobody;
     private string? Active(string s) => s == Section ? "active" : null;
+    [Inject] public Homepage.Forms.FormService Forms { get; set; } = default!;
+    private int _unread;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (A is not null && !Full && P.HasSystem(SystemGroups.Forms, Perm.Ro)) _unread = await Forms.UnreadAsync();
+    }
 }

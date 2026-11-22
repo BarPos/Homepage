@@ -339,7 +339,7 @@ public static class AdminEndpoints
         });
 
         admin.MapGet("/editor/{target}/inspector/{blockId}", async (string target, string blockId, HttpContext http, ContentService content,
-            MediaService media, MenuService menus, BlogService blogs) =>
+            MediaService media, MenuService menus, BlogService blogs, Homepage.Forms.FormService forms, Homepage.Mail.MailService mail) =>
         {
             var a = AdminContext.Get(http);
             var doc = await content.LoadDocumentAsync(a.Perms, ParseTarget(target));
@@ -350,6 +350,7 @@ public static class AdminEndpoints
             {
                 Node = node, Target = doc.Target, CanEdit = canEdit,
                 Media = await media.ListAsync(a.Perms), Menus = await menus.ListAsync(), Blogs = await blogs.AllAsync(),
+                Forms = node.Type == "form" ? await forms.ListAsync() : [], Lists = node.Type == "subscribe" ? await mail.ListsAsync() : [],
             });
         });
 
@@ -752,6 +753,8 @@ public static class AdminEndpoints
             return Results.Content(sb.ToString(), "text/html; charset=utf-8");
         });
         MapProfile(admin);
+        admin.MapFormsAdmin();
+        admin.MapMailAdmin();
         MapAccess(admin);
         MapSettings(admin);
     }
@@ -852,7 +855,7 @@ public static class AdminEndpoints
         });
     }
 
-    private static string Csv(string s) =>
+    internal static string Csv(string s) =>
         s.IndexOfAny([',', '"', '\n', '\r']) >= 0 || s.StartsWith('=') || s.StartsWith('+') || s.StartsWith('-') || s.StartsWith('@')
             ? "\"" + (s.StartsWith('=') || s.StartsWith('+') || s.StartsWith('-') || s.StartsWith('@') ? "'" : "") + s.Replace("\"", "\"\"") + "\""
             : s;
@@ -902,6 +905,7 @@ public static class AdminEndpoints
                 return FlashCookie.Redirect(http, "/admin/profile", r.Errors.Any(e => e.Code == "PasswordMismatch") ? "The current password is not right." : string.Join(" ", r.Errors.Select(e => e.Description)), error: true);
             await AdminSession.RefreshAsync(http, me); // other sessions end (new security stamp); this one continues
             await audit.WriteAsync(me.UserName ?? "", "user.password", "User", me.Id.ToString(), "changed own password");
+            await MailAdminEndpoints.AccountEmailAsync(http, Homepage.Mail.SystemEmails.PasswordChanged, me);
             return FlashCookie.Redirect(http, "/admin/profile", "Password changed. You were signed out everywhere else.");
         });
 
@@ -936,6 +940,7 @@ public static class AdminEndpoints
             var codes = (await users.GenerateNewTwoFactorRecoveryCodesAsync(me, 10))!.ToList();
             await AdminSession.RefreshAsync(http, me);
             await audit.WriteAsync(me.UserName ?? "", "user.2fa.on", "User", me.Id.ToString(), "");
+            await MailAdminEndpoints.AccountEmailAsync(http, Homepage.Mail.SystemEmails.TwoFactorChanged, me, "on");
             return Html.Render<RecoveryCodesPage>(new { Codes = codes, JustEnabled = true });
         });
 
@@ -955,6 +960,7 @@ public static class AdminEndpoints
             if (!await users.CheckPasswordAsync(me, password ?? "")) return FlashCookie.Redirect(http, "/admin/profile", "The password is not right.", error: true);
             await accounts.DisableTwoFactorAsync(me.Id, me.UserName ?? "");
             await AdminSession.RefreshAsync(http, await Me(http, users));
+            await MailAdminEndpoints.AccountEmailAsync(http, Homepage.Mail.SystemEmails.TwoFactorChanged, me, "off");
             return FlashCookie.Redirect(http, "/admin/profile", "Two-factor sign-in is off.");
         });
     }
@@ -1007,6 +1013,7 @@ public static class AdminEndpoints
         {
             RequireAdmin(http);
             var (result, user) = await accounts.CreateAsync(userName, displayName ?? "", password, AdminContext.Get(http).Actor, email: email);
+            if (result.Ok) await MailAdminEndpoints.AccountEmailAsync(http, Homepage.Mail.SystemEmails.AccountCreated, user);
             return result.Ok ? FlashCookie.Redirect(http, $"/admin/users/{user!.Id}", "Account created. Give it roles or group permissions next.")
                              : FlashCookie.Redirect(http, "/admin/users/new", result.Error ?? "", error: true);
         });
@@ -1014,7 +1021,10 @@ public static class AdminEndpoints
         admin.MapPost("/users/{id:int}/2fa/disable", async (int id, HttpContext http, AccountService accounts) =>
         {
             RequireAdmin(http);
+            var users = http.RequestServices.GetRequiredService<UserManager<User>>();
+            var wasOn = (await users.FindByIdAsync(id.ToString()))?.TwoFactorEnabled == true;
             var r = await accounts.DisableTwoFactorAsync(id, AdminContext.Get(http).Actor);
+            if (r.Ok && wasOn) await MailAdminEndpoints.AccountEmailAsync(http, Homepage.Mail.SystemEmails.TwoFactorChanged, await users.FindByIdAsync(id.ToString()), "off");
             return r.Ok ? FlashCookie.Redirect(http, $"/admin/users/{id}", "Two-factor sign-in is off for this account.") : FlashCookie.Redirect(http, $"/admin/users/{id}", r.Error ?? "", error: true);
         });
 
@@ -1064,6 +1074,7 @@ public static class AdminEndpoints
         {
             RequireAdmin(http);
             var r = await accounts.ResetPasswordAsync(id, password, AdminContext.Get(http).Actor);
+            if (r.Ok) await MailAdminEndpoints.AccountEmailAsync(http, Homepage.Mail.SystemEmails.PasswordChanged, await http.RequestServices.GetRequiredService<UserManager<User>>().FindByIdAsync(id.ToString()));
             return r.Ok ? FlashCookie.Redirect(http, $"/admin/users/{id}", "Password changed.") : FlashCookie.Redirect(http, $"/admin/users/{id}", r.Error ?? "", error: true);
         });
 

@@ -1,0 +1,94 @@
+@using Homepage.Mail
+<AdminShell Title="@List.Name" Section="mail" Back="/admin/mail/lists" BackText="Mailing lists" Subtitle="@List.Description">
+    <Actions>
+        @if (CanWrite)
+        {
+            <a class="btn" href="/admin/mail/lists/@List.Id/export">Export CSV</a>
+            <a class="btn btn-primary" href="/admin/mail/send?list=@List.Id">Send email</a>
+            <form method="post" action="/admin/mail/lists/@List.Id/delete" data-confirm="All its subscribers are deleted too. This cannot be undone." data-confirm-title="Delete the list '@List.Name'?" data-confirm-button="Delete list" data-confirm-danger>
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <button class="btn-danger">Delete list</button>
+            </form>
+        }
+    </Actions>
+    <ChildContent>
+    @if (!string.IsNullOrEmpty(Message)) { <div class="inline-alert ok">@Message</div> }
+    @if (!string.IsNullOrEmpty(Error)) { <div class="inline-alert">@Error</div> }
+    @if (CanWrite)
+    {
+        <div class="grid-2">
+            <form method="post" action="/admin/mail/lists/@List.Id/subscribers" class="card">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <h2 class="card-title">Add a subscriber</h2>
+                <div class="form-row">
+                    <div><label for="se">Email</label><input id="se" name="email" type="email" maxlength="200" required /></div>
+                    <div><label for="sn">Name</label><input id="sn" name="name" type="text" maxlength="100" /></div>
+                </div>
+                <label class="inline" style="margin-top:12px"><input type="checkbox" name="confirmed" value="true" /> They already agreed to get these emails (no confirmation email)</label>
+                <div class="form-actions"><button class="btn-primary">Add</button></div>
+            </form>
+            <form method="post" action="/admin/mail/lists/@List.Id" class="card">
+                <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                <h2 class="card-title">List settings</h2>
+                <div class="form-row">
+                    <div><label for="ln">Name</label><input id="ln" name="name" type="text" value="@List.Name" maxlength="100" required /></div>
+                    <div><label for="ld">Description</label><input id="ld" name="description" type="text" value="@List.Description" maxlength="500" /></div>
+                </div>
+                <label class="inline" style="margin-top:12px"><input type="checkbox" name="doubleOptIn" value="true" checked="@List.DoubleOptIn" /> Confirm by email (double opt-in)</label>
+                <div class="form-actions"><button class="btn">Save</button></div>
+            </form>
+        </div>
+    }
+    <ListFilters Url="Url" Placeholder="Search email or name…">
+        <select name="status" aria-label="Status">
+            <option value="">Everyone</option>
+            @foreach (var s in Enum.GetValues<SubscriberStatus>()) { <option value="@s" selected="@(Url["status"] == s.ToString())">@Label(s)</option> }
+        </select>
+    </ListFilters>
+    <div id="list">
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Since</th><th>From</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in Result.Items)
+                {
+                    <tr>
+                        <td>@s.Email</td>
+                        <td>@s.Name</td>
+                        <td><span class="badge @(s.Status switch { SubscriberStatus.Subscribed => "badge-ok", SubscriberStatus.Pending => "badge-warn", _ => "badge-off" })">@Label(s.Status)</span></td>
+                        <td class="nowrap muted small">@((s.ConfirmedAtUtc ?? s.CreatedAtUtc).ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))</td>
+                        <td class="muted small">@s.Source</td>
+                        <td class="right nowrap">
+                            @if (CanWrite)
+                            {
+                                <form method="post" action="/admin/mail/lists/@List.Id/subscribers/@s.Id" class="inline-form">
+                                    <input type="hidden" name="__RequestVerificationToken" value="@Token" />
+                                    @if (s.Status != SubscriberStatus.Unsubscribed) { <button class="btn-sm" name="action" value="unsubscribe">Unsubscribe</button> }
+                                    <button class="btn-sm btn-danger" name="action" value="delete" data-confirm="@($"{s.Email} is removed from the list. To stop emails but remember the address, unsubscribe instead.")" data-confirm-title="Delete this subscriber?" data-confirm-button="Delete" data-confirm-danger>Delete</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Result.Total == 0) { <tr><td colspan="6" class="muted">@(Url["q"] is { Length: > 0 } || Url["status"] is { Length: > 0 } ? "Nobody matches." : "Nobody yet. Add a Newsletter sign-up block to a page.")</td></tr> }
+            </tbody>
+        </table>
+    </div>
+    <Pager Url="Url" Page="Result.Page" TotalPages="Result.TotalPages" Total="Result.Total" From="Result.From" To="Result.To" />
+    </div>
+    </ChildContent>
+</AdminShell>
+@code {
+    [Parameter, EditorRequired] public MailingList List { get; set; } = default!;
+    [Parameter, EditorRequired] public PagedResult<Subscriber> Result { get; set; } = default!;
+    [Parameter, EditorRequired] public ListUrl Url { get; set; } = default!;
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+    private string Token => HttpContext is null ? "" : AdminContext.From(HttpContext)?.CsrfToken ?? "";
+    public static string Label(SubscriberStatus s) => s switch
+    {
+        SubscriberStatus.Subscribed => "subscribed", SubscriberStatus.Pending => "waiting for confirmation", _ => "unsubscribed",
+    };
+}
